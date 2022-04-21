@@ -142,19 +142,18 @@ same index. QOI_OP_RUN should be used instead.
 .- QOI_OP_DIFF -----------.
 |         Byte[0]         |
 |  7  6  5  4  3  2  1  0 |
-|-------+-----+-----+-----|
-|  0  1 |  dr |  dg |  db |
+|-------+--------+--------|
+|  0  1 |r+ g+ b+|r- b- g-|
 `-------------------------`
 2-bit tag b01
-2-bit   red channel difference from the previous pixel between -2..1
-2-bit green channel difference from the previous pixel between -2..1
-2-bit  blue channel difference from the previous pixel between -2..1
+3-bit RGB channel increase from the previous pixel 0..1
+3-bit RGB channel decrease from the previous pixel 0..1
 
 The difference to the current channel values are using a wraparound operation,
-so "1 - 2" will result in 255, while "255 + 1" will result in 0.
+so "0 - 1" will result in 255, while "255 + 1" will result in 0.
 
-Values are stored as unsigned integers with a bias of 2. E.g. -2 is stored as
-0 (b00). 1 is stored as 3 (b11).
+Values are stored as one bit per channel. E.g. green+1 blue+1 red-1 is stored as
+3, 4 (b011100). Green-1 is stored as 0, 1 (b000001).
 
 The alpha value remains unchanged from the previous pixel.
 
@@ -469,11 +468,13 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
 					signed char vg_b = vb - vg;
 
 					if (
-						vr > -3 && vr < 2 &&
-						vg > -3 && vg < 2 &&
-						vb > -3 && vb < 2
+						vr > -2 && vr < 2 &&
+						vg > -2 && vg < 2 &&
+						vb > -2 && vb < 2
 					) {
-						bytes[p++] = QOI_OP_DIFF | (vr + 2) << 4 | (vg + 2) << 2 | (vb + 2);
+						bytes[p++] = QOI_OP_DIFF |
+							(vr < 0) << 5 | (vg < 0) << 4 | (vb < 0) << 3 |
+							(vr > 0) << 2 | (vg > 0) << 1 | (vb > 0);
 					}
 					else if (
 						vg_r >  -9 && vg_r <  8 &&
@@ -584,9 +585,9 @@ void *qoi_decode(const void *data, int size, qoi_desc *desc, int channels) {
 				px = index[b1];
 			}
 			else if ((b1 & QOI_MASK_2) == QOI_OP_DIFF) {
-				px.rgba.r += ((b1 >> 4) & 0x03) - 2;
-				px.rgba.g += ((b1 >> 2) & 0x03) - 2;
-				px.rgba.b += ( b1       & 0x03) - 2;
+				px.rgba.r += ((b1 >> 5) & 1) - ((b1 >> 2) & 1);
+				px.rgba.g += ((b1 >> 4) & 1) - ((b1 >> 1) & 1);
+				px.rgba.b += ((b1 >> 3) & 1) - (b1 & 1);
 			}
 			else if ((b1 & QOI_MASK_2) == QOI_OP_LUMA) {
 				int b2 = bytes[p++];
