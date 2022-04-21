@@ -191,20 +191,19 @@ The alpha value remains unchanged from the previous pixel.
 |  1  1 |       run       |
 `-------------------------`
 2-bit tag b11
-6-bit run-length repeating the previous pixel: 1..62
+6-bit run-length repeating the previous pixel: 1..63
 
-The run-length is stored with a bias of -1. Note that the run-lengths 63 and 64
-(b111110 and b111111) are illegal as they are occupied by the QOI_OP_RGB and
-QOI_OP_RGBA tags.
+The run-length is stored with a bias of -1. Note that the run-length 64
+(b111111) is illegal as they are occupied by the QOI_OP_RGB tag.
 
 
 .- QOI_OP_RGB ------------------------------------------.
 |         Byte[0]         | Byte[1] | Byte[2] | Byte[3] |
 |  7  6  5  4  3  2  1  0 | 7 .. 0  | 7 .. 0  | 7 .. 0  |
 |-------------------------+---------+---------+---------|
-|  1  1  1  1  1  1  1  0 |   red   |  green  |  blue   |
+|  1  1  1  1  1  1  1  1 |   red   |  green  |  blue   |
 `-------------------------------------------------------`
-8-bit tag b11111110
+8-bit tag b11111111
 8-bit   red channel value
 8-bit green channel value
 8-bit  blue channel value
@@ -216,9 +215,9 @@ The alpha value remains unchanged from the previous pixel.
 |         Byte[0]         | Byte[1] | Byte[2] | Byte[3] | Byte[4] |
 |  7  6  5  4  3  2  1  0 | 7 .. 0  | 7 .. 0  | 7 .. 0  | 7 .. 0  |
 |-------------------------+---------+---------+---------+---------|
-|  1  1  1  1  1  1  1  1 |   red   |  green  |  blue   |  alpha  |
+|  0  1  1  1  1  1  1  1 |   red   |  green  |  blue   |  alpha  |
 `-----------------------------------------------------------------`
-8-bit tag b11111111
+8-bit tag b01111111
 8-bit   red channel value
 8-bit green channel value
 8-bit  blue channel value
