@@ -334,12 +334,17 @@ Implementation */
 #define QOI_OP_DIFF   0x40 /* 01xxxxxx */
 #define QOI_OP_LUMA   0x80 /* 10xxxxxx */
 #define QOI_OP_RUN    0xc0 /* 11xxxxxx */
-#define QOI_OP_RGB    0xfe /* 11111110 */
-#define QOI_OP_RGBA   0xff /* 11111111 */
+#define QOI_OP_BIGRUN 0x49 /* 01x01xx1 */
+#define QOI_OP_RGB    0xff /* 11111111 */
+#define QOI_OP_RGBA   0x7f /* 01111111 */
 
 #define QOI_MASK_2    0xc0 /* 11000000 */
 
-#define QOI_COLOR_HASH(C) (C.rgba.r*3 + C.rgba.g*5 + C.rgba.b*7 + C.rgba.a*11)
+#define QOI_ALPHA_LO  113  /* 01110001 */
+#define QOI_ALPHA_MID 120  /* 01111000 */
+#define QOI_ALPHA_HI  127  /* 01111111 */
+
+#define QOI_COLOR_HASH(C) (C.rgba.r*3 + C.rgba.g*5 + C.rgba.b*7) /* + C.rgba.a*11) */
 #define QOI_MAGIC \
 	(((unsigned int)'q') << 24 | ((unsigned int)'o') << 16 | \
 	 ((unsigned int)'i') <<  8 | ((unsigned int)'f'))
