@@ -337,6 +337,7 @@ Implementation */
 #define QOI_OP_RGBA   0x7f /* 01111111 */
 
 #define QOI_MASK_2    0xc0 /* 11000000 */
+#define QOI_MASK_2_21 0xd9 /* 11011001 */
 
 #define QOI_ALPHA_LO  113  /* 01110001 */
 #define QOI_ALPHA_MID 120  /* 01111000 */
@@ -444,14 +445,16 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
             qoi_rgba_t px_cached;
 
 			if (run > 0 || px_prev.v == px.v) {
+                int no_skip = 0;
                 for (int n = 14; n > 5; n -= 2) {
                     int twobit = run & (3 << n);
-                    if (twobit) {
+                    if (twobit || no_skip) {
                         bytes[p++] = QOI_OP_BIGRUN | 
                             (twobit >> (n - 5)) | 
                             (twobit >> n) | 
                             ((run == twobit) << 2);
                         run ^= twobit;
+                        no_skip = 1;
                     }
                 }
                 if (run > 0) {
@@ -621,28 +624,26 @@ void *qoi_decode(const void *data, int size, qoi_desc *desc, int channels) {
 			else if ((b1 & QOI_MASK_2) == QOI_OP_INDEX) {
 				px = index[b1];
 			}
-            else if ((b1 & QOI_MASK_2) == QOI_OP_DIFF) {
-                if ((b1 & QOI_OP_BIGRUN) == QOI_OP_BIGRUN) {
-                    do {
-                        run <<= 2;
-                        run |= (b1 & (b1 >> 5)) << 6;
-                        if (b1 & 4) {
-                            break;
-                        }
-                        b1 = bytes[p++];
-                    } while ((b1 & QOI_OP_BIGRUN) == QOI_OP_BIGRUN);
-                    if ((b1 & QOI_MASK_2) == QOI_OP_RUN) {
-                        run |= (b1 & 0x3f);
+            else if ((b1 & QOI_MASK_2_21) == QOI_OP_BIGRUN) {
+                do {
+                    run <<= 2;
+                    run |= (b1 & (b1 >> 5)) << 6;
+                    if (b1 & 4) {
+                        break;
                     }
-                    else {
-                        --run;
-                    }
+                    b1 = bytes[p++];
+                } while ((b1 & QOI_MASK_2_21) == QOI_OP_BIGRUN);
+                if ((b1 & QOI_MASK_2) == QOI_OP_RUN) {
+                    run |= (b1 & 0x3f);
                 }
                 else {
-                    px.rgba.r += ((b1 >> 5) & 1) - ((b1 >> 2) & 1);
-                    px.rgba.g += ((b1 >> 4) & 1) - ((b1 >> 1) & 1);
-                    px.rgba.b += ((b1 >> 3) & 1) - (b1 & 1);
+                    --run;
                 }
+            }
+            else if ((b1 & QOI_MASK_2) == QOI_OP_DIFF) {
+                px.rgba.r += ((b1 >> 5) & 1) - ((b1 >> 2) & 1);
+                px.rgba.g += ((b1 >> 4) & 1) - ((b1 >> 1) & 1);
+                px.rgba.b += ((b1 >> 3) & 1) - (b1 & 1);
 			}
 			else if ((b1 & QOI_MASK_2) == QOI_OP_LUMA) {
 				int b2 = bytes[p++];
