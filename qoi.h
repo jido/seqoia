@@ -475,6 +475,7 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
             ) {
                 if (va != 0) {
                     bytes[p++] = QOI_ALPHA_MID + va;
+                    index[index_pos] = px;
                 }
 				bytes[p++] = QOI_OP_INDEX | index_pos;
 			}
