@@ -452,7 +452,7 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
                         bytes[p++] = QOI_OP_BIGRUN | 
                             (twobit >> (n - 5)) | 
                             (twobit >> n) | 
-                            ((run == twobit) << 2);
+                            ((n == 6 && (run ^ twobit) == 0) << 2);
                         run ^= twobit;
                         no_skip = 1;
                     }
