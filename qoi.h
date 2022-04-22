@@ -152,8 +152,8 @@ same index. QOI_OP_RUN should be used instead.
 The difference to the current channel values are using a wraparound operation,
 so "0 - 1" will result in 255, while "255 + 1" will result in 0.
 
-Values are stored as one bit per channel. E.g. green+1 blue+1 red-1 is stored as
-3, 4 (b011100). Green-1 is stored as 0, 1 (b000001).
+Values are stored as one bit per channel. E.g. green+1 blue+1 red-1 is stored
+as 3, 4 (b011100). Green-1 is stored as 0, 1 (b000001).
 
 The alpha value remains unchanged from the previous pixel.
 
@@ -194,7 +194,7 @@ The alpha value remains unchanged from the previous pixel.
 6-bit run-length repeating the previous pixel: 1..63
 
 The run-length is stored with a bias of -1. Note that the run-length 64
-(b111111) is illegal as they are occupied by the QOI_OP_RGB tag.
+(b11111111) is illegal as it is occupied by the QOI_OP_RGB tag.
 
 
 .- QOI_OP_RGB ------------------------------------------.
@@ -333,7 +333,7 @@ Implementation */
 #define QOI_OP_LUMA   0x80 /* 10xxxxxx */
 #define QOI_OP_RUN    0xc0 /* 11xxxxxx */
 #define QOI_OP_BIGRUN 0x49 /* 01x01xx1 */
-#define QOI_OP_RGB    0xff /* 11111111 */
+#define QOI_OP_RGB    0xfe /* 11111110 */
 #define QOI_OP_RGBA   0x7f /* 01111111 */
 
 #define QOI_MASK_2    0xc0 /* 11000000 */
@@ -434,37 +434,70 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
 		if (channels == 4) {
 			px.rgba.a = pixels[px_pos + 3];
 		}
-
-		if (px.v == px_prev.v) {
+        
+        if (px_prev.v == px.v && run < 65535 && px_pos < px_end) {
 			run++;
-			if (run == 62 || px_pos == px_end) {
-				bytes[p++] = QOI_OP_RUN | (run - 1);
-				run = 0;
-			}
 		}
 		else {
 			int index_pos;
+            int va;
+            qoi_rgba_t px_cached;
 
-			if (run > 0) {
-				bytes[p++] = QOI_OP_RUN | (run - 1);
+			if (run > 0 || px_prev.v == px.v) {
+                for (int n = 14; n > 5; n -= 2) {
+                    int twobit = run & (3 << n);
+                    if (twobit) {
+                        bytes[p++] = QOI_OP_BIGRUN | (twobit >> (n - 5)) | (twobit >> n) | ((run == twobit) << 2);
+                        run ^= twobit;
+                    }
+                }
+                if (run > 0) {
+				    bytes[p++] = QOI_OP_RUN | (run - 1);
+                }
 				run = 0;
+                if (px_prev.v == px.v) {
+                    continue;
+                }
 			}
 
 			index_pos = QOI_COLOR_HASH(px) % 64;
+            px_cached = index[index_pos];
+            va = px.rgba.x - px_cached.rgba.a;
 
-			if (index[index_pos].v == px.v) {
+			if (
+                px_cached.rgba.r == px.rgba.r && 
+                px_cached.rgba.g == px.rgba.g && 
+                px_cached.rgba.b == px.rgba.b && 
+                va > -7 && va < 7
+            ) {
+                if (va != 0) {
+                    bytes[p++] = QOI_ALPHA_MID + va;
+                }
 				bytes[p++] = QOI_OP_INDEX | index_pos;
 			}
 			else {
 				index[index_pos] = px;
 
-				if (px.rgba.a == px_prev.rgba.a) {
+				va = px.rgba.a - px_prev.rgba.a;
+                
+                if (va < -6 || va > 6) {
+					bytes[p++] = QOI_OP_RGBA;
+					bytes[p++] = px.rgba.r;
+					bytes[p++] = px.rgba.g;
+					bytes[p++] = px.rgba.b;
+					bytes[p++] = px.rgba.a;
+				}
+                else {
 					signed char vr = px.rgba.r - px_prev.rgba.r;
 					signed char vg = px.rgba.g - px_prev.rgba.g;
 					signed char vb = px.rgba.b - px_prev.rgba.b;
 
 					signed char vg_r = vr - vg;
 					signed char vg_b = vb - vg;
+                    
+                    if (va != 0) {
+                        bytes[p++] = QOI_ALPHA_MID + va;
+                    }
 
 					if (
 						vr > -2 && vr < 2 &&
@@ -489,13 +522,6 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
 						bytes[p++] = px.rgba.g;
 						bytes[p++] = px.rgba.b;
 					}
-				}
-				else {
-					bytes[p++] = QOI_OP_RGBA;
-					bytes[p++] = px.rgba.r;
-					bytes[p++] = px.rgba.g;
-					bytes[p++] = px.rgba.b;
-					bytes[p++] = px.rgba.a;
 				}
 			}
 		}
