@@ -111,7 +111,7 @@ the color value. In the encoder, if the pixel value at the index matches the
 current pixel, this index position is written to the stream as QOI_OP_INDEX.
 The hash function for the index is:
 
-	index_position = (r * 3 + g * 5 + b * 7 + a * 11) % 64
+	index_position = (r * 3 + g * 5 + b * 7) % 64
 
 Each chunk starts with a 2- or 8-bit tag, followed by a number of data bits. The
 bit length of chunks is divisible by 8 - i.e. all chunks are byte aligned. All
@@ -146,16 +146,17 @@ same index. QOI_OP_RUN should be used instead.
 |  0  1 |r+ g+ b+|r- b- g-|
 `-------------------------`
 2-bit tag b01
-3-bit RGB channel increase from the previous pixel 0..1
-3-bit RGB channel decrease from the previous pixel 0..1
+3-bit RGB channel increase from the previous pixel 0..1 x 3
+3-bit RGB channel decrease from the previous pixel 0..1 x 3
 
 The difference to the current channel values are using a wraparound operation,
 so "0 - 1" will result in 255, while "255 + 1" will result in 0.
 
 Values are stored as one bit per channel. E.g. green+1 blue+1 red-1 is stored
-as 3, 4 (b011100). Green-1 is stored as 0, 1 (b000001).
+as 3, 4 (b011100). Green-1 is stored as 0, 2 (b000010).
 
-The alpha value remains unchanged from the previous pixel.
+Note that a channel cannot be up and down at the same time, which means the
+only valid values starting with b0111 are 0x71 and 0x78.
 
 
 .- QOI_OP_LUMA -------------------------------------.
@@ -181,8 +182,6 @@ so "10 - 13" will result in 253, while "250 + 7" will result in 1.
 Values are stored as unsigned integers with a bias of 32 for the green channel
 and a bias of 8 for the red and blue channel.
 
-The alpha value remains unchanged from the previous pixel.
-
 
 .- QOI_OP_RUN ------------.
 |         Byte[0]         |
@@ -195,6 +194,31 @@ The alpha value remains unchanged from the previous pixel.
 
 The run-length is stored with a bias of -1. Note that the run-length 64
 (b11111111) is illegal as it is occupied by the QOI_OP_RGB tag.
+
+
+.- QOI_OP_BIGRUN -------------------.
+|         Byte[0]         | Byte[1] |
+|  7  6  5  4  3  2  1  0 | 7 .. 0  |
+|-------------------------+---------|
+|  0  1  0  0  1  1  1  1 |   run   |
+`-----------------------------------`
+8-bit tag b01001111
+8-bit run-length repeating the previous pixel: 64..319
+
+The run-length is stored with a bias of -64.
+
+
+.- QOI_OP_MAXRUN -----------------------------.
+|         Byte[0]         | Byte[1] | Byte[2] |
+|  7  6  5  4  3  2  1  0 | 7 .. 0  | 7 .. 0  |
+|-------------------------+---------+---------|
+|  0  1  1  0  1  1  1  1 |        run        |
+`---------------------------------------------`
+8-bit tag b01101111
+16-bit run-length repeating the previous pixel: 320..65855
+
+The run-length is stored in with the most significant byte first and with a
+bias of -320.
 
 
 .- QOI_OP_RGB ------------------------------------------.
@@ -222,6 +246,30 @@ The alpha value remains unchanged from the previous pixel.
 8-bit green channel value
 8-bit  blue channel value
 8-bit alpha channel value
+
+
+.- Alpha update ----------.
+|         Byte[0]         |
+|  7  6  5  4  3  2  1  0 |
+|-------------+-----------|
+|  0  1  1  1 |alpha diff |
+`-------------------------`
+4-bit tag b0111
+4-bit alpha channel difference from previous pixel -6..6
+
+This operation does not produce a pixel, instead it applies to next pixel.
+Unless the alpha update operation is used the alpha channel of the next pixel 
+remains unchanged from previous pixel.
+
+The difference to the current channel values are using a wraparound operation,
+so "2 - 5" will result in 253, while "255 + 2" will result in 1.
+
+The value is stored as unsigned integers with a bias of 8. Note that value 120
+(which would correspond to an alpha update of 0) is invalid as it is used for 
+the QOI_OP_DIFF tag.
+
+Alpha update cannot be used together with the various RUN operations or with
+the RGBA operation.
 
 */
 
