@@ -1,6 +1,28 @@
 /*
 
-SQOA - The "Quite OK Image" format for fast, lossless image compression
+SQOA - The fast image compression which losslessly squashes image size
+
+       Based on QOI https://phoboslab.org/log/2021/12/qoi-specification
+
+Denis Bredelet - https://github.com/jido
+
+
+-- LICENSE: The MIT License(MIT), see below.
+
+-- About
+
+As compared to QOI the SQOA format loses some range for the DIFF operation,
+with gradients between -1 and +1 instead of between -2 and +1. In exchange
+it gains operations for long runs (up to 65855 pixels) and Alpha Update, which
+uses a single byte to update the alpha channel of the next pixel with a range
+of values between -6 and +6.
+
+
+Original header:
+
+
+¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨
+QOI - The "Quite OK Image" format for fast, lossless image compression
 
 Dominic Szablewski - https://phoboslab.org
 
@@ -28,9 +50,12 @@ SOFTWARE.
 
 -- About
 
-SQOA encodes and decodes images in a lossless format. Compared to stb_image and
-stb_image_write SQOA offers 20x-50x faster encoding, 3x-4x faster decoding and
+QOI encodes and decodes images in a lossless format. Compared to stb_image and
+stb_image_write QOI offers 20x-50x faster encoding, 3x-4x faster decoding and
 20% better compression.
+
+¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨
+
 
 
 -- Synopsis
@@ -39,7 +64,7 @@ stb_image_write SQOA offers 20x-50x faster encoding, 3x-4x faster decoding and
 // library to create the implementation.
 
 #define SQOA_IMPLEMENTATION
-#include "sqoa.h"
+#include "seqoia.h"
 
 // Encode and store an RGBA buffer to the file system. The sqoa_desc describes
 // the input pixel data.
@@ -102,7 +127,9 @@ Pixels are encoded as
  - full r,g,b or r,g,b,a values
 
 The color channels are assumed to not be premultiplied with the alpha channel
-("un-premultiplied alpha").
+("un-premultiplied alpha"). If the difference between the alpha value of the
+pixel and the reference pixel (indexed or previous) is at most 6 in amplitude,
+this can also be encoded.
 
 A running array[64] (zero-initialized) of previously seen pixel values is
 maintained by the encoder and decoder. Each pixel that is seen by the encoder
@@ -118,7 +145,9 @@ bit length of chunks is divisible by 8 - i.e. all chunks are byte aligned. All
 values encoded in these data bits have the most significant bit on the left.
 
 The 8-bit tags have precedence over the 2-bit tags. A decoder must check for the
-presence of an 8-bit tag first.
+presence of an 8-bit tag first. The Alpha Update operation uses values between
+SQOA_ALPHA_LO and SQOA_ALPHA_HI exclusive, with SQOA_ALPHA_MID equally excluded.
+A decoder must advance to the next chunk after reading an Alpha Update chunk.
 
 The byte stream's end is marked with 7 0x00 bytes followed a single 0x01 byte.
 
@@ -156,7 +185,7 @@ Values are stored as one bit per channel. E.g. green+1 blue+1 red-1 is stored
 as 3, 4 (b011100). Green-1 is stored as 0, 2 (b000010).
 
 Note that a channel cannot be up and down at the same time, which means the
-only valid values starting with b0111 are 0x71 and 0x78.
+valid values starting with b0111 are limited to 0x70, 0x71 and 0x78.
 
 
 .- SQOA_OP_LUMA ------------------------------------.
@@ -391,7 +420,7 @@ Implementation */
 
 #define SQOA_RUN_LIMIT 65855 /* 64 + 256 + 65535 */
 
-#define SQOA_COLOR_HASH(C) (C.rgba.r*3 + C.rgba.g*5 + C.rgba.b*7) /* + C.rgba.a*11) */
+#define SQOA_COLOR_HASH(C) (C.rgba.r*3 + C.rgba.g*5 + C.rgba.b*7)
 #define SQOA_MAGIC \
     (((unsigned int)'S') << 24 | ((unsigned int)'q') << 16 | \
      ((unsigned int)'o') <<  8 | ((unsigned int)'a'))
