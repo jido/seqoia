@@ -78,13 +78,13 @@ int long_shl(int shift, uint_fast32_t number[], int nseg) {
 #define FREQ_BITS 10
 #define NUM_SYMBOLS 256
 
-int compress(unsigned char *bytes, size_t len, uint_fast32_t cumuf[], uint_fast32_t result[], int size) {
+int compress(unsigned char *bytes, size_t len, uint_fast32_t cumulf[], uint_fast32_t result[], int size) {
     int nseg = 1;
     int p = len - 1;
-    result[0] = cumuf[p];
+    result[0] = cumulf[p];
     for (; p >= 0; --p) {
         unsigned char b = bytes[p];
-        uint_fast32_t f = cumuf[b + 1] - cumuf[b];
+        uint_fast32_t f = cumulf[b + 1] - cumulf[b];
         uint_fast32_t rest;
         int shift = (f == 2) ? 1 : (f == 4) ? 2 : (f == 8) ? 3 : (f == 16) ? 4 :
             (f == 32) ? 5 : (f == 64) ? 6 : (f == 128) ? 7 : (f == 256) ? 8 : 0;
@@ -96,7 +96,7 @@ int compress(unsigned char *bytes, size_t len, uint_fast32_t cumuf[], uint_fast3
         }
         nseg = long_shl(FREQ_BITS, result, nseg);
         
-        result[0] |= cumuf[b] + rest;
+        result[0] |= cumulf[b] + rest;
         if (nseg == 0) {
             nseg = 1;
         }
@@ -104,10 +104,10 @@ int compress(unsigned char *bytes, size_t len, uint_fast32_t cumuf[], uint_fast3
     return nseg;
 }
 
-void expand(unsigned char *bytes, size_t len, uint_fast32_t cumuf[], uint_fast32_t source[], int nseg) {
+void expand(unsigned char *bytes, size_t len, uint_fast32_t cumulf[], uint_fast32_t source[], int nseg) {
     unsigned char syms[1 << FREQ_BITS];
     for (int b = 0; b < NUM_SYMBOLS; ++b) {
-        uint_fast32_t start = cumuf[b], end = cumuf[b + 1];
+        uint_fast32_t start = cumulf[b], end = cumulf[b + 1];
         for (int i = start; i < end; ++i) {
             syms[i] = b;
         }
@@ -118,7 +118,7 @@ void expand(unsigned char *bytes, size_t len, uint_fast32_t cumuf[], uint_fast32
         unsigned char b = syms[rest];
         bytes[i] = b;
         if (i < len - 1) {
-            uint_fast32_t f = cumuf[b + 1] - cumuf[b];
+            uint_fast32_t f = cumulf[b + 1] - cumulf[b];
             int shift = (f == 2) ? 1 : (f == 4) ? 2 : (f == 8) ? 3 : (f == 16) ? 4 :
                 (f == 32) ? 5 : (f == 64) ? 6 : (f == 128) ? 7 : (f == 256) ? 8 : 0;
             if (shift) {
@@ -127,25 +127,81 @@ void expand(unsigned char *bytes, size_t len, uint_fast32_t cumuf[], uint_fast32
             else {
                 nseg = long_mul(f, source, nseg);
             }
-            source[0] += rest - cumuf[b];
-            if (nseg == 0 && rest != cumuf[b]) {
+            source[0] += rest - cumulf[b];
+            if (nseg == 0 && rest != cumulf[b]) {
                 nseg = 1;
             }
         }
     }
 }
 
-void cumulate(uint_fast32_t freqs[]) {
+void squash_freqs(uint_fast32_t freqs[], unsigned char *buf) {
+    for (int i = 0; i < NUM_SYMBOLS; ++i) {
+        buf[i] = (unsigned char) freqs[i];
+    }    
+}
+
+uint_fast32_t cumulate(uint_fast32_t freqs[]) {
+    int thres1 = 0;
+    int thres2 = 0;
+    int thres3 = 0;
+    int thres4 = 0;
     int s = 0;
     for (int i = 0; i <= NUM_SYMBOLS; ++i) {
+        if (!thres1 && s >= 256) {
+            thres1 = i;
+        }
+        if (!thres2 && s >= 512) {
+            thres2 = i;
+        }
+        if (!thres3 && s >= 768) {
+            thres3 = i;
+        }
+        if (!thres4 && s >= 1024) {
+            thres4 = i;
+        }
         int f = freqs[i];
         freqs[i] = s;
         s += f;
     }
+    return (thres1 - 1) << 24 | (thres2 - 1) << 16 | (thres3 - 1) << 8 | (thres4 - 1);
+}
+
+void restore_cumulf(uint_fast32_t cumulf[NUM_SYMBOLS + 1], uint_fast32_t thresholds, unsigned char *freqs) {
+    int s = 0;
+    for (int i = 0; i < NUM_SYMBOLS; ++i) {
+        cumulf[i] = s;
+        s += freqs[i];
+    }
+    cumulf[NUM_SYMBOLS] = 1 << FREQ_BITS;
+    int thres = 1 + (thresholds >> 24);
+    if (cumulf[thres] < 256) {
+        for (int i = thres; i < NUM_SYMBOLS; ++i) {
+            cumulf[i] += 256;
+        }
+    }
+    thres = 1 + ((thresholds >> 16) & 0xff);
+    if (cumulf[thres] < 512) {
+        for (int i = thres; i < NUM_SYMBOLS; ++i) {
+            cumulf[i] += 256;
+        }
+    }
+    thres = 1 + ((thresholds >> 8) & 0xff);
+    if (cumulf[thres] < 768) {
+        for (int i = thres; i < NUM_SYMBOLS; ++i) {
+            cumulf[i] += 256;
+        }
+    }
+    thres = 1 + (thresholds & 0xff);
+    if (cumulf[thres] < 1024) {
+        for (int i = thres; i < NUM_SYMBOLS; ++i) {
+            cumulf[i] += 256;
+        }
+    }
 }
 
 int main() {
-    unsigned char counts[256] = {0};
+    uint_fast32_t counts[257] = {0};
     unsigned char buf[1024];
     int r = fread(buf, 1, 1024, stdin);
     while (r < 1024)
@@ -172,17 +228,26 @@ int main() {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
     };
     cumulate(ft_freqs);
-    uint_fast32_t result[100];
-    int wc = compress(counts, 256, ft_freqs, result, 100);
-    printf("Used %d x 32 bit words.\n", wc);
+    unsigned char squashed[256];
+    squash_freqs(counts, squashed);
+    uint_fast32_t thresholds = cumulate(counts);
+    uint_fast32_t result[400];
+    int wc = compress(squashed, 256, ft_freqs, result, 100);
+    printf("Used %d x 32 bit words for frequency table.\n", wc);
+
     unsigned char o[256] = {0};
+    uint_fast32_t ft[257] = {0};
     expand(o, 256, ft_freqs, result, wc);
+    restore_cumulf(ft, thresholds, o);
     int bad = 0;
-    for (int i = 0; i < 256; ++i) {
-        if (counts[i] != o[i]) {
+    for (int i = 0; i <= 256; ++i) {
+        if (counts[i] != ft[i]) {
             ++bad;
-            //printf("Non-matching symbol at %d, was: %.2x but got: %.2x\n", i, counts[i], o[i]);
+            printf("Non-matching symbol at %d, was: %.2x but got: %.2x\n", i, counts[i], o[i]);
         }
     }
     printf("\nbad = %d\n", bad);
+    
+    wc = compress(buf, 1024, ft, result, 400);
+    printf("Used %d x 32 bit words for data.\n", wc);
 }
