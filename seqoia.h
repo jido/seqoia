@@ -333,6 +333,16 @@ typedef struct {
     unsigned char colorspace;
 } sqoa_desc;
 
+#define SQOA_BLOCK_SIZE 1024
+#define SQOA_UNCOMPRESSED 0
+#define SQOA_BEANS 1
+
+typedef struct {
+    unsigned int length: 12;
+    unsigned int reserved: 12;
+    unsigned int compress_type: 8;
+} sqoa_block_header;
+
 #ifndef SQOA_NO_STDIO
 
 /* Encode raw RGB or RGBA pixels into a SQOA image and write it to the file
@@ -455,9 +465,10 @@ static unsigned int sqoa_read_32(const unsigned char *bytes, int *p) {
 }
 
 void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
-    int i, max_size, p, run;
+    int i, max_size, p, run, len;
     int px_len, px_end, px_pos, channels;
     unsigned char *bytes;
+    unsigned char block[SQOA_BLOCK_SIZE];
     const unsigned char *pixels;
     sqoa_rgba_t index[64];
     sqoa_rgba_t px, px_prev;
@@ -493,6 +504,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 
     SQOA_ZEROARR(index);
 
+    len = 0;
     run = 0;
     px_prev.rgba.r = 0;
     px_prev.rgba.g = 0;
@@ -505,8 +517,10 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
     channels = desc->channels;
 
     for (px_pos = 0; px_pos < px_len; px_pos += channels) {
-        int index_pos;
+        unsigned char op[5];
+        int op_len = 0;
         signed char va;
+        int index_pos;
         sqoa_rgba_t px_cached;
 
         px.rgba.r = pixels[px_pos + 0];
@@ -525,16 +539,16 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             (run > 0 && (px_pos == px_end || px_prev.v != px.v))
         ) {
             if (run < 64) {
-                bytes[p++] = SQOA_OP_RUN | (run - 1);
+                op[op_len++] = SQOA_OP_RUN | (run - 1);
             }
             else if (run < 320) {
-                bytes[p++] = SQOA_OP_BIGRUN;
-                bytes[p++] = run - 64;
+                op[op_len++] = SQOA_OP_BIGRUN;
+                op[op_len++] = run - 64;
             }
             else {
-                bytes[p++] = SQOA_OP_MAXRUN;
-                bytes[p++] = (run - 320) >> 8;
-                bytes[p++] = (unsigned char) (run - 320);
+                op[op_len++] = SQOA_OP_MAXRUN;
+                op[op_len++] = (run - 320) >> 8;
+                op[op_len++] = (unsigned char) (run - 320);
             }
             run = 0;
         }
@@ -550,10 +564,10 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                 va > -7 && va < 7
             ) {
                 if (va != 0) {
-                    bytes[p++] = SQOA_ALPHA_MID + va;
+                    op[op_len++] = SQOA_ALPHA_MID + va;
                     index[index_pos] = px;
                 }
-                bytes[p++] = SQOA_OP_INDEX | index_pos;
+                op[op_len++] = SQOA_OP_INDEX | index_pos;
             }
             else {
                 index[index_pos] = px;
@@ -561,11 +575,11 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                 va = px.rgba.a - px_prev.rgba.a;
                 
                 if (va < -6 || va > 6) {
-                    bytes[p++] = SQOA_OP_RGBA;
-                    bytes[p++] = px.rgba.r;
-                    bytes[p++] = px.rgba.g;
-                    bytes[p++] = px.rgba.b;
-                    bytes[p++] = px.rgba.a;
+                    op[op_len++] = SQOA_OP_RGBA;
+                    op[op_len++] = px.rgba.r;
+                    op[op_len++] = px.rgba.g;
+                    op[op_len++] = px.rgba.b;
+                    op[op_len++] = px.rgba.a;
                 }
                 else {
                     signed char vr = px.rgba.r - px_prev.rgba.r;
@@ -576,7 +590,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                     signed char vg_b = vb - vg;
                     
                     if (va != 0) {
-                        bytes[p++] = SQOA_ALPHA_MID + va;
+                        op[op_len++] = SQOA_ALPHA_MID + va;
                     }
 
                     if (
@@ -584,7 +598,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                         vg > -2 && vg < 2 &&
                         vb > -2 && vb < 2
                     ) {
-                        bytes[p++] = SQOA_OP_DIFF |
+                        op[op_len++] = SQOA_OP_DIFF |
                             (vr > 0) << 5 | (vg > 0) << 4 | (vb > 0) << 3 |
                             (vr < 0) << 2 | (vg < 0) << 1 | (vb < 0);
                     }
@@ -593,18 +607,32 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                         vg   > -33 && vg   < 32 &&
                         vg_b >  -9 && vg_b <  8
                     ) {
-                        bytes[p++] = SQOA_OP_LUMA     | (vg   + 32);
-                        bytes[p++] = (vg_r + 8) << 4 | (vg_b +  8);
+                        op[op_len++] = SQOA_OP_LUMA    | (vg   + 32);
+                        op[op_len++] = (vg_r + 8) << 4 | (vg_b +  8);
                     }
                     else {
-                        bytes[p++] = SQOA_OP_RGB;
-                        bytes[p++] = px.rgba.r;
-                        bytes[p++] = px.rgba.g;
-                        bytes[p++] = px.rgba.b;
+                        op[op_len++] = SQOA_OP_RGB;
+                        op[op_len++] = px.rgba.r;
+                        op[op_len++] = px.rgba.g;
+                        op[op_len++] = px.rgba.b;
                     }
                 }
             }
             px_prev = px;
+            if (len + op_len >= SQOA_BLOCK_SIZE) {
+                sqoa_write_32(bytes, &p, *((unsigned int *) &(sqoa_block_header){
+                    .length = len, 
+                    .reserved = 0, 
+                    .compress_type = SQOA_UNCOMPRESSED
+                }));
+                for (int i = 0; i < len; ++i) {
+                    bytes[p++] = block[i];
+                }
+                len = 0; 
+            }
+            for (int i = 0; i < op_len; ++i) {
+                block[len++] = op[i];
+            }
         }
     }
 
