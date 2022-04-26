@@ -333,15 +333,12 @@ typedef struct {
     unsigned char colorspace;
 } sqoa_desc;
 
-#define SQOA_BLOCK_SIZE 1024
+#define SQOA_BLOCK_SIZE 4096
 #define SQOA_UNCOMPRESSED 0
-#define SQOA_BEANS 1
+#define SQOA_COMP_BEANS 1
 
-typedef struct {
-    unsigned int length: 12;
-    unsigned int reserved: 12;
-    unsigned int compress_type: 8;
-} sqoa_block_header;
+#define SQOA_BLOCK_LEN(h, l) (((h) << 4) | ((l) >> 4))
+#define SQOA_BLOCK_COMPT(h, l) ((l) & 0xf)
 
 #ifndef SQOA_NO_STDIO
 
@@ -517,7 +514,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
     channels = desc->channels;
 
     for (px_pos = 0; px_pos < px_len; px_pos += channels) {
-        unsigned char op[5];
+        unsigned char op[8];
         int op_len = 0;
         signed char va;
         int index_pos;
@@ -619,12 +616,9 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                 }
             }
             px_prev = px;
-            if (len + op_len >= SQOA_BLOCK_SIZE) {
-                sqoa_write_32(bytes, &p, *((unsigned int *) &(sqoa_block_header){
-                    .length = len, 
-                    .reserved = 0, 
-                    .compress_type = SQOA_UNCOMPRESSED
-                }));
+            if (len + op_len > SQOA_BLOCK_SIZE) {
+                bytes[p++] = (len - 1) >> 4;
+                bytes[p++] = ((len - 1) << 4) | SQOA_UNCOMPRESSED;
                 for (int i = 0; i < len; ++i) {
                     bytes[p++] = block[i];
                 }
@@ -635,9 +629,10 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             }
         }
     }
-
-    for (i = 0; i < (int)sizeof(sqoa_padding); i++) {
-        bytes[p++] = sqoa_padding[i];
+    bytes[p++] = (len - 1) >> 4;
+    bytes[p++] = ((len - 1) << 4) | SQOA_UNCOMPRESSED;
+    for (int i = 0; i < len; ++i) {
+        bytes[p++] = block[i];
     }
 
     *out_len = p;
