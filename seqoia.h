@@ -337,7 +337,7 @@ typedef struct {
 #define SQOA_UNCOMPRESSED 0
 #define SQOA_COMP_BEANS 1
 
-#define SQOA_BLOCK_LEN(h, l) (((h) << 4) | ((l) >> 4))
+#define SQOA_BLOCK_LEN(h, l) (1 + (((h) << 4) | ((l) >> 4)))
 #define SQOA_BLOCK_COMPT(h, l) ((l) & 0xf)
 
 #ifndef SQOA_NO_STDIO
