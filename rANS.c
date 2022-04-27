@@ -203,7 +203,7 @@ void restore_cumulf(uint_fast32_t cumulf[NUM_SYMBOLS + 1], uint_fast32_t thresho
         s += freqs[i];
     }
     for (int i = thres4; i <= NUM_SYMBOLS; ++i) {
-        cumulf[NUM_SYMBOLS] = FREQ_TOTAL;
+        cumulf[i] = FREQ_TOTAL;
     }
 }
 
