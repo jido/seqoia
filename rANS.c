@@ -76,7 +76,7 @@ int beans_long_shl(int shift, uint_least32_t number[], int nseg) {
 #define BEANS_FREQ_BITS 10
 #define BEANS_FREQ_TOTAL (1 << BEANS_FREQ_BITS)
 #define BEANS_NUM_SYMBOLS 256
-#define BEANS_CODE_LEN(e) (e >> 6)
+#define BEANS_CODE_LEN(e) (e & 0x1ffffff)
 
 void beans_normalise_freqs(const uint_least32_t freq[BEANS_NUM_SYMBOLS], uint_least32_t norm[BEANS_NUM_SYMBOLS]);
 
@@ -153,7 +153,7 @@ int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[],
         if (ft_len == 0) {
             return 0;
         }
-        n += ft_len >> 6;
+        n += BEANS_CODE_LEN(ft_len);
     }
     cumulf[BEANS_NUM_SYMBOLS] = BEANS_FREQ_TOTAL;
     
@@ -183,18 +183,67 @@ int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[],
             nseg = 1;
         }
     }
-    return n | (nseg << 6);
+    return (n << 25) | (nseg + n);
 }
 
-void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nseg, const uint_least32_t freq[]) {
+void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nseg, const uint_least32_t counts[]) {
     unsigned char syms[BEANS_FREQ_TOTAL];
     uint_least32_t cumulf[BEANS_NUM_SYMBOLS + 1];
-    int s = 0;
-    for (int i = 0; i < BEANS_NUM_SYMBOLS; ++i) {
-        cumulf[i] = s;
-        s += freq[i];
+    int n = 0;
+    
+    if (counts != NULL) {
+        uint_least32_t freq[BEANS_NUM_SYMBOLS];
+        beans_normalise_freqs(counts, freq);
+
+        uint_fast32_t s = 0;
+        for (int i = 0; i < BEANS_NUM_SYMBOLS; ++i) {
+            cumulf[i] = s;
+            s += freq[i];
+        }
+        cumulf[BEANS_NUM_SYMBOLS] = BEANS_FREQ_TOTAL;
     }
-    cumulf[BEANS_NUM_SYMBOLS] = BEANS_FREQ_TOTAL;
+    else {
+        unsigned char freq[BEANS_NUM_SYMBOLS];
+        int s = 0;
+        uint_least32_t thresholds = code[0];
+        int thres1 = 1 + (thresholds >> 24);
+        int thres2 = 1 + ((thresholds >> 16) & 0xff);
+        int thres3 = 1 + ((thresholds >> 8) & 0xff);
+        int thres4 = 1 + (thresholds & 0xff);
+        n = nseg >> 25;
+        
+        nseg = BEANS_CODE_LEN(nseg) - n;
+        beans_inflate(freq, BEANS_NUM_SYMBOLS, code + 1, n - 1, beans_ft_freqs);
+
+        for (int i = 0; i < thres1; ++i) {
+            cumulf[i] = s;
+            s += freq[i];
+        }
+        if (s < 256) {
+            s += 256;
+        }
+        for (int i = thres1; i < thres2; ++i) {
+            cumulf[i] = s;
+            s += freq[i];
+        }
+        if (s < 512) {
+            s += 256;
+        }
+        for (int i = thres2; i < thres3; ++i) {
+            cumulf[i] = s;
+            s += freq[i];
+        }
+        if (s < 768) {
+            s += 256;
+        }
+        for (int i = thres3; i < thres4; ++i) {
+            cumulf[i] = s;
+            s += freq[i];
+        }
+        for (int i = thres4; i <= BEANS_NUM_SYMBOLS; ++i) {
+            cumulf[i] = BEANS_FREQ_TOTAL;
+        }
+    }
     for (int b = 0; b < BEANS_NUM_SYMBOLS; ++b) {
         uint_fast32_t start = cumulf[b], end = cumulf[b + 1];
         for (int i = start; i < end; ++i) {
@@ -203,7 +252,7 @@ void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nse
     }
     for (int i = 0; i < len; ++i) {
         uint_fast32_t rest;
-        nseg = beans_long_shr(BEANS_FREQ_BITS, code, nseg, &rest);
+        nseg = beans_long_shr(BEANS_FREQ_BITS, code + n, nseg, &rest);
         unsigned char b = syms[rest];
         bytes[i] = b;
         if (i < len - 1) {
@@ -212,53 +261,16 @@ void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nse
                 (f == 64) ? 6 : (f == 128) ? 7 : (f == 256) ? 8 : (f == 512) ? 9 : (f == 1024) ? 10 : 
                 0;
             if (shift) {
-                nseg = beans_long_shl(shift, code, nseg);
+                nseg = beans_long_shl(shift, code + n, nseg);
             }
             else {
-                nseg = beans_long_mul(f, code, nseg);
+                nseg = beans_long_mul(f, code + n, nseg);
             }
-            code[0] += rest - cumulf[b];
+            code[n] += rest - cumulf[b];
             if (nseg == 0 && rest != cumulf[b]) {
                 nseg = 1;
             }
         }
-    }
-}
-
-void restore_cumulf(uint_fast32_t cumulf[BEANS_NUM_SYMBOLS + 1], uint_fast32_t thresholds, unsigned char *freqs) {
-    int s = 0;
-    int thres1 = 1 + (thresholds >> 24);
-    int thres2 = 1 + ((thresholds >> 16) & 0xff);
-    int thres3 = 1 + ((thresholds >> 8) & 0xff);
-    int thres4 = 1 + (thresholds & 0xff);
-
-    for (int i = 0; i < thres1; ++i) {
-        cumulf[i] = s;
-        s += freqs[i];
-    }
-    if (s < 256) {
-        s += 256;
-    }
-    for (int i = thres1; i < thres2; ++i) {
-        cumulf[i] = s;
-        s += freqs[i];
-    }
-    if (s < 512) {
-        s += 256;
-    }
-    for (int i = thres2; i < thres3; ++i) {
-        cumulf[i] = s;
-        s += freqs[i];
-    }
-    if (s < 768) {
-        s += 256;
-    }
-    for (int i = thres3; i < thres4; ++i) {
-        cumulf[i] = s;
-        s += freqs[i];
-    }
-    for (int i = thres4; i <= BEANS_NUM_SYMBOLS; ++i) {
-        cumulf[i] = BEANS_FREQ_TOTAL;
     }
 }
 
@@ -310,40 +322,15 @@ int main() {
     uint_fast32_t num[1500];
 
     int wc = beans_compress(buf, r, num, 1500, NULL);
-    printf("Used %d x 32 bit words (freq table: %d).\n", BEANS_CODE_LEN(wc), wc & 63);
+    printf("Used %d x 32 bit words (freq table: %d).\n", BEANS_CODE_LEN(wc), wc >> 25);
 
-    unsigned char o[256] = {0};
-    uint_least32_t ft[257] = {0};
-    beans_inflate(o, 256, num + 1, wc & 63, beans_ft_freqs);
-    restore_cumulf(ft, num[0], o);
-    uint_least32_t counts[257] = {0};
-    uint_least32_t freq[257];
-    int bad = 0;
-    int s = 0;
-    for (int i = 0; i < r; ++i) {
-        counts[buf[i]]++;
-    }
-    beans_normalise_freqs(counts, freq);
-    for (int i = 0; i < 256; ++i) {
-        counts[i] = s;
-        s += freq[i];
-    }
-    counts[256] = s;
-    for (int i = 0; i <= 256; ++i) {
-        if (counts[i] != ft[i]) {
-            ++bad;
-            printf("Non-matching symbol at %d, was: %.2x but got: %.2x\n", i, counts[i], ft[i]);
-        }
-    }
-    printf("\nbad = %d\n", bad);
-/*    
     unsigned char result[SZ];
-    expand(result, r, num, wc, ft);
-    bad = 0;
+    beans_inflate(result, r, num, wc, NULL);
+    int bad = 0;
     for (int i = 0; i < r; ++i) {
         if (result[i] != buf[i]) {
             ++bad;
         }
     }
-    printf("\nbad = %d\n", bad);*/
+    printf("\nbad = %d\n", bad);
 }
