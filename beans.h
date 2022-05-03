@@ -1,7 +1,129 @@
-#include <stdlib.h>
+/*
+
+BEANS - A single header solution for ANS-based compression
+
+Denis Bredelet - https://github.com/jido
+
+
+-- LICENSE: The MIT License(MIT)
+
+Copyright(c) 2022 Denis Bredelet
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files(the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and / or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions :
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+
+-- Synopsis
+
+// Define `BEANS_IMPLEMENTATION` in *one* C/C++ file before including this
+// library to create the implementation.
+
+#define BEANS_IMPLEMENTATION
+#include "beans.h"
+
+// Compress the input buffer to an array of 32-bit numbers. When the frequency
+// table is NULL, frequencies are calculated from the input data itself.
+int len_info = beans_compress(buffer, length, array, size, NULL);
+
+// Uncompress the number array into the target buffer, updating the array.
+beans_inflate(target, length, array, len_info, NULL);
+
+
+
+-- Documentation
+
+This library provides the following functions;
+- beans_compress  -- compress a byte buffer in memory to an array of integers
+- beans_inflate  -- expand compressed data from an array of integers to memory
+(destructive operation: one shot only)
+- beans_normalise_freqs  -- optimise symbol frequencies for reuse
+
+See the function declaration below for the signature and more information.
+
+
+*/
+
+/* -----------------------------------------------------------------------------
+Header - Public functions */
+
+#ifndef BEANS_H
+#define BEANS_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 #include <stdint.h>
 
-int beans_long_div(uint_fast32_t divisor, uint_least32_t number[], int nseg, uint_fast32_t *remainder) {
+#define BEANS_NUM_SYMBOLS 256
+#define BEANS_CODE_LEN(e) (e & 0x1ffffff)
+#define BEANS_FT_LEN(e) (e >> 25)
+
+/* Compress a byte buffer in memory to an array of integers
+
+Inputs: the byte buffer, its length, an allocated array of integers, its size,
+ symbol counts [optional argument: can be NULL, in which case the counts are
+ calculated from the byte buffer data and stored in compressed form together 
+ with the rest of the data]
+
+Output: compressed length information. Use BEANS_CODE_LEN and BEANS_FT_LEN
+ to split the value between overall length and counts (frequency table) length
+ The returned value is 0 in case of error (e.g. array size too small).
+*/
+int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[], int size, const uint_least32_t *counts);
+
+/* Expand compressed data from an array of integers to memory
+
+Inputs: the memory buffer to decompress into, number of symbols to uncompress,
+ integer array with the compressed data, compressed length information
+ returned by compress function, frequency table (symbol counts used to
+ compress) [optional argument: can be NULL, in which case the table is
+ read from the compressed data array]
+*/
+void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nseg, const uint_least32_t counts[]);
+
+/* Optimise symbol frequencies for reuse
+
+Inputs: a frequency table, an array of integers where to save the optimised
+ table. The main effect of this function is to scale the values so that they
+ add up to BEANS_FREQ_TOTAL which is required for compression. Using this
+ function before compress saves having to normalise every time a frequency
+ table is reused.
+*/
+void beans_normalise_freqs(const uint_least32_t freq[BEANS_NUM_SYMBOLS], uint_least32_t norm[BEANS_NUM_SYMBOLS]);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /*ifndef BEANS_H*/
+
+
+
+
+#ifdef BEANS_IMPLEMENTATION
+#include <stdlib.h>
+
+#define BEANS_FREQ_BITS 10
+#define BEANS_FREQ_TOTAL (1 << BEANS_FREQ_BITS)
+
+
+static int beans_long_div(uint_fast32_t divisor, uint_least32_t number[], int nseg, uint_fast32_t *remainder) {
     uint_fast64_t rest = 0;
     if (divisor != 1) {
         if (divisor > number[nseg - 1]) {
@@ -21,7 +143,7 @@ int beans_long_div(uint_fast32_t divisor, uint_least32_t number[], int nseg, uin
     return nseg;
 }
 
-int beans_long_mul(uint_fast32_t factor, uint_least32_t number[], int nseg) {
+static int beans_long_mul(uint_fast32_t factor, uint_least32_t number[], int nseg) {
     if (factor != 1) {
         uint_fast64_t carry = 0;
         for (int i = 0; i < nseg; ++i) {
@@ -37,7 +159,7 @@ int beans_long_mul(uint_fast32_t factor, uint_least32_t number[], int nseg) {
     return nseg;
 }
 
-int beans_long_shr(int shift, uint_least32_t number[], int nseg, uint_fast32_t *remainder) {
+static int beans_long_shr(int shift, uint_least32_t number[], int nseg, uint_fast32_t *remainder) {
     uint_fast32_t rest = 0;
     if (shift != 0) {
         uint_fast32_t mask = (1 << shift) - 1;
@@ -57,7 +179,7 @@ int beans_long_shr(int shift, uint_least32_t number[], int nseg, uint_fast32_t *
     return nseg;
 }
 
-int beans_long_shl(int shift, uint_least32_t number[], int nseg) {
+static int beans_long_shl(int shift, uint_least32_t number[], int nseg) {
     if (shift != 0) {
         uint_fast32_t carry = 0;
         for (int i = 0; i < nseg; ++i) {
@@ -73,14 +195,7 @@ int beans_long_shl(int shift, uint_least32_t number[], int nseg) {
     return nseg;
 }
 
-#define BEANS_FREQ_BITS 10
-#define BEANS_FREQ_TOTAL (1 << BEANS_FREQ_BITS)
-#define BEANS_NUM_SYMBOLS 256
-#define BEANS_CODE_LEN(e) (e & 0x1ffffff)
-
-void beans_normalise_freqs(const uint_least32_t freq[BEANS_NUM_SYMBOLS], uint_least32_t norm[BEANS_NUM_SYMBOLS]);
-
-const uint_least32_t beans_ft_freqs[BEANS_NUM_SYMBOLS] = {
+static const uint_least32_t beans_ft_freqs[BEANS_NUM_SYMBOLS] = {
     512, 128, 64, 32, 16, 8, 4, 4, 4, 2, 2, 2, 2, 2, 1, 1, 1,
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
@@ -95,7 +210,6 @@ const uint_least32_t beans_ft_freqs[BEANS_NUM_SYMBOLS] = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 };
-
 
 int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[], int size, const uint_least32_t *counts) {
     if (bytes == NULL || len < 1 || result == NULL || size < 1) {
@@ -210,8 +324,8 @@ void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nse
         int thres2 = 1 + ((thresholds >> 16) & 0xff);
         int thres3 = 1 + ((thresholds >> 8) & 0xff);
         int thres4 = 1 + (thresholds & 0xff);
-        n = nseg >> 25;
-        
+
+        n = BEANS_FT_LEN(nseg);        
         nseg = BEANS_CODE_LEN(nseg) - n;
         beans_inflate(freq, BEANS_NUM_SYMBOLS, code + 1, n - 1, beans_ft_freqs);
 
@@ -313,24 +427,4 @@ void beans_normalise_freqs(const uint_least32_t freq[BEANS_NUM_SYMBOLS], uint_le
     }
 }
 
-#include <stdio.h>
-#define SZ 4096
-
-int main() {
-    unsigned char buf[SZ];
-    int r = fread(buf, 1, SZ, stdin);
-    uint_fast32_t num[1500];
-
-    int wc = beans_compress(buf, r, num, 1500, NULL);
-    printf("Used %d x 32 bit words (freq table: %d).\n", BEANS_CODE_LEN(wc), wc >> 25);
-
-    unsigned char result[SZ];
-    beans_inflate(result, r, num, wc, NULL);
-    int bad = 0;
-    for (int i = 0; i < r; ++i) {
-        if (result[i] != buf[i]) {
-            ++bad;
-        }
-    }
-    printf("\nbad = %d\n", bad);
-}
+#endif /*ifdef SQOA_IMPLEMENTATION*/
