@@ -402,6 +402,10 @@ Implementation */
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef SQOA_COMPRESSION
+#include "beans.h"
+#endif
+
 #ifndef SQOA_MALLOC
     #define SQOA_MALLOC(sz) malloc(sz)
     #define SQOA_FREE(p)    free(p)
@@ -617,11 +621,29 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             }
             px_prev = px;
             if (len + op_len > SQOA_BLOCK_SIZE) {
+#ifdef SQOA_COMPRESSION
+                uint_least32_t compressed[SQOA_BLOCK_SIZE >> 2];
+                unsigned int info = beans_compress(block, len, compressed, SQOA_BLOCK_SIZE >> 2, NULL);
+                if (info != 0) {
+                    sqoa_write_32(bytes, &p, (SQOA_COMP_BEANS << 28) | ((len - 1) << 16) | (BEANS_FT_LEN(info) << 10) | BEANS_CODE_LEN(info));
+                    for (int i = 0; i < BEANS_CODE_LEN(info); ++i) {
+                        sqoa_write_32(bytes, &p, compressed[i]);
+                    }
+                }
+                else {
+                    bytes[p++] = (SQOA_UNCOMPRESSED << 4) | ((len - 1) >> 8);
+                    bytes[p++] = (unsigned char)(len - 1);
+                    for (int i = 0; i < len; ++i) {
+                        bytes[p++] = block[i];
+                    }
+                }
+#else
                 bytes[p++] = (SQOA_UNCOMPRESSED << 4) | ((len - 1) >> 8);
                 bytes[p++] = (unsigned char)(len - 1);
                 for (int i = 0; i < len; ++i) {
                     bytes[p++] = block[i];
                 }
+#endif
                 len = 0; 
             }
             for (int i = 0; i < op_len; ++i) {
@@ -640,6 +662,11 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 }
 
 void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
+#ifdef SQOA_COMPRESSION
+    unsigned char block[SQOA_BLOCK_SIZE];
+#else
+    const unsigned char *block;
+#endif
     const unsigned char *bytes;
     unsigned int header_magic;
     unsigned char *pixels;
@@ -699,36 +726,42 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
         }
         else if (p < size) {
             if (block_pos == block_len) {
+#ifdef SQOA_COMPRESSION
+                free(pixels);
+                return NULL;
+#else
                 p += block_len;
                 h = bytes[p++];
                 l = bytes[p++];
                 block_len = SQOA_BLOCK_LEN(h, l);
-                if (SQOA_BLOCK_COMPT(h, l) != SQOA_UNCOMPRESSED) {
+                if (SQOA_BLOCK_COMPT(h, l) == SQOA_COMP_BEANS) {
                     free(pixels);
                     return NULL;
                 }
+                block = bytes + p;
                 block_pos = 0;
+#endif
             }
-            int b1 = bytes[p + block_pos++];
+            int b1 = block[block_pos++];
             signed char va = 0;
             
             if (b1 > SQOA_ALPHA_LO && b1 < SQOA_ALPHA_HI) {
                 va = b1 - SQOA_ALPHA_MID;
                 if (va != 0) {
-                    b1 = bytes[p + block_pos++];
+                    b1 = block[block_pos++];
                 }
             }
 
             if (b1 == SQOA_OP_RGB) {
-                px.rgba.r = bytes[p + block_pos++];
-                px.rgba.g = bytes[p + block_pos++];
-                px.rgba.b = bytes[p + block_pos++];
+                px.rgba.r = block[block_pos++];
+                px.rgba.g = block[block_pos++];
+                px.rgba.b = block[block_pos++];
             }
             else if (b1 == SQOA_OP_RGBA) {
-                px.rgba.r = bytes[p + block_pos++];
-                px.rgba.g = bytes[p + block_pos++];
-                px.rgba.b = bytes[p + block_pos++];
-                px.rgba.a = bytes[p + block_pos++];
+                px.rgba.r = block[block_pos++];
+                px.rgba.g = block[block_pos++];
+                px.rgba.b = block[block_pos++];
+                px.rgba.a = block[block_pos++];
             }
             else if ((b1 & SQOA_MASK_2) == SQOA_OP_INDEX) {
                 px = index[b1];
@@ -737,11 +770,11 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 run = (b1 & 0x3f);
             }
             else if (b1 == SQOA_OP_BIGRUN) {
-                run = 63 + bytes[p + block_pos++];
+                run = 63 + block[block_pos++];
             }
             else if (b1 == SQOA_OP_MAXRUN) {
-                int hibits = bytes[p + block_pos++];
-                run = 319 + (hibits << 8) + bytes[p + block_pos++];
+                int hibits = block[block_pos++];
+                run = 319 + (hibits << 8) + block[block_pos++];
             }
             else if ((b1 & SQOA_MASK_2) == SQOA_OP_DIFF) {
                 px.rgba.r += ((b1 >> 5) & 1) - ((b1 >> 2) & 1);
@@ -749,7 +782,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 px.rgba.b += ((b1 >> 3) & 1) - (b1 & 1);
             }
             else if ((b1 & SQOA_MASK_2) == SQOA_OP_LUMA) {
-                int b2 = bytes[p + block_pos++];
+                int b2 = block[block_pos++];
                 int vg = (b1 & 0x3f) - 32;
                 px.rgba.r += vg - 8 + ((b2 >> 4) & 0x0f);
                 px.rgba.g += vg;
