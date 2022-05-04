@@ -623,7 +623,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             if (len + op_len > SQOA_BLOCK_SIZE) {
 #ifdef SQOA_COMPRESSION
                 uint_least32_t compressed[SQOA_BLOCK_SIZE >> 2];
-                unsigned int info = beans_compress(block, len, compressed, SQOA_BLOCK_SIZE >> 2, NULL);
+                unsigned int info = beans_compress(block, len, compressed, (len - 1) >> 2, NULL);
                 if (info != 0) {
                     sqoa_write_32(bytes, &p, (SQOA_COMP_BEANS << 28) | ((len - 1) << 16) | (BEANS_FT_LEN(info) << 10) | BEANS_CODE_LEN(info));
                     for (int i = 0; i < BEANS_CODE_LEN(info); ++i) {
@@ -724,21 +724,53 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
         if (run > 0) {
             run--;
         }
-        else if (p < size) {
+        else if (p < size || block_pos < block_len) {
             if (block_pos == block_len) {
 #ifdef SQOA_COMPRESSION
-                free(pixels);
-                return NULL;
+                h = bytes[p];
+                if (SQOA_BLOCK_COMPT(h, 0) == SQOA_COMP_BEANS) {
+                    int block_size, ft_size;
+                    uint_least32_t data[SQOA_BLOCK_SIZE >> 2];
+                    unsigned int info = sqoa_read_32(bytes, &p);
+                    l = (info >> 16) & 0xff;
+                    block_len = SQOA_BLOCK_LEN(h, l);
+                    block_size = info & 0x3ff;
+                    ft_size = (info >> 10) & 0x3f;
+                    for (int i = 0; i < block_size; ++i) {
+                        data[i] = sqoa_read_32(bytes, &p);
+                    }
+                    beans_inflate(block, block_len, data, block_size | (ft_size << 25), NULL);
+                    printf("Inflate: %d codes -> %d bytes Sample: %.2x %.2x %.2x %.2x ... %.2x %.2x %.2x %.2x\n", block_size, block_len,
+                         block[0], block[1], block[2], block[3], block[block_len - 4], block[block_len - 3], block[block_len - 2], block[block_len - 1]);
+                    block_pos = 0;
+                    if (info == 0) {
+                        free(pixels);
+                        return NULL;
+                    }
+                }
+                else {
+                    h = bytes[p++];
+                    l = bytes[p++];
+                    block_len = SQOA_BLOCK_LEN(h, l);
+                    if (SQOA_BLOCK_COMPT(h, l) != SQOA_UNCOMPRESSED) {
+                        free(pixels);
+                        return NULL;
+                    }
+                    for (int i = 0; i < block_len; ++i) {
+                        block[i] = bytes[p++];
+                    }
+                    block_pos = 0;
+                }
 #else
-                p += block_len;
                 h = bytes[p++];
                 l = bytes[p++];
                 block_len = SQOA_BLOCK_LEN(h, l);
-                if (SQOA_BLOCK_COMPT(h, l) == SQOA_COMP_BEANS) {
+                if (SQOA_BLOCK_COMPT(h, l) != SQOA_UNCOMPRESSED) {
                     free(pixels);
                     return NULL;
                 }
                 block = bytes + p;
+                p += block_len;
                 block_pos = 0;
 #endif
             }
