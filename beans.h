@@ -120,7 +120,7 @@ void beans_normalise_freqs(const uint_least32_t freq[BEANS_NUM_SYMBOLS], uint_le
 #include <stdlib.h>
 
 #define BEANS_FREQ_BITS 10
-#define BEANS_FREQ_TOTAL (1 << BEANS_FREQ_BITS)
+#define BEANS_FREQ_TOTAL (1u << BEANS_FREQ_BITS)
 
 
 static int beans_long_div(uint_fast32_t divisor, uint_least32_t number[], int nseg, uint_fast32_t *remainder) {
@@ -267,7 +267,12 @@ int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[],
         if (ft_len == 0) {
             return 0;
         }
-        n += BEANS_CODE_LEN(ft_len);
+        ft_len = beans_long_shl(6, result + n, ft_len);
+        if (ft_len > 64) {
+            return 0;
+        }
+        result[n] |= (ft_len - 1);
+        n += ft_len;
     }
     cumulf[BEANS_NUM_SYMBOLS] = BEANS_FREQ_TOTAL;
     
@@ -297,7 +302,7 @@ int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[],
             nseg = 1;
         }
     }
-    return (n << 25) | (nseg + n);
+    return (nseg + n);
 }
 
 void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nseg, const uint_least32_t counts[]) {
@@ -324,10 +329,12 @@ void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nse
         int thres2 = 1 + ((thresholds >> 16) & 0xff);
         int thres3 = 1 + ((thresholds >> 8) & 0xff);
         int thres4 = 1 + (thresholds & 0xff);
+        int m = 1;
 
-        n = BEANS_FT_LEN(nseg);        
-        nseg = BEANS_CODE_LEN(nseg) - n;
-        beans_inflate(freq, BEANS_NUM_SYMBOLS, code + 1, n - 1, beans_ft_freqs);
+        m += code[1] & 63;
+        n = 1 + m;
+        m = beans_long_shr(6, code + 1, m, NULL);
+        beans_inflate(freq, BEANS_NUM_SYMBOLS, code + 1, m, beans_ft_freqs);
 
         for (int i = 0; i < thres1; ++i) {
             cumulf[i] = s;
@@ -357,6 +364,7 @@ void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nse
         for (int i = thres4; i <= BEANS_NUM_SYMBOLS; ++i) {
             cumulf[i] = BEANS_FREQ_TOTAL;
         }
+        nseg -= n;
     }
     for (int b = 0; b < BEANS_NUM_SYMBOLS; ++b) {
         uint_fast32_t start = cumulf[b], end = cumulf[b + 1];
