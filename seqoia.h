@@ -739,8 +739,8 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                         data[i] = sqoa_read_32(bytes, &p);
                     }
                     beans_inflate(block, block_len, data, block_size, NULL);
-                    printf("Inflate: %d codes -> %d bytes Sample: %.2x %.2x %.2x %.2x ... %.2x %.2x %.2x %.2x\n", block_size, block_len,
-                         block[0], block[1], block[2], block[3], block[block_len - 4], block[block_len - 3], block[block_len - 2], block[block_len - 1]);
+                    //printf("Inflate: %d codes -> %d bytes Sample: %.2x %.2x %.2x %.2x ... %.2x %.2x %.2x %.2x\n", block_size, block_len,
+                    //     block[0], block[1], block[2], block[3], block[block_len - 4], block[block_len - 3], block[block_len - 2], block[block_len - 1]);
                     block_pos = 0;
                 }
                 else {
@@ -768,6 +768,10 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 p += block_len;
                 block_pos = 0;
 #endif
+            }
+            else if (block_pos > block_len) {
+                free(pixels);
+                return NULL;
             }
             int b1 = block[block_pos++];
             signed char va = 0;

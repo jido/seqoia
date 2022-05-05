@@ -125,7 +125,7 @@ void beans_normalise_freqs(const uint_least32_t freq[BEANS_NUM_SYMBOLS], uint_le
 
 static int beans_long_div(uint_fast32_t divisor, uint_least32_t number[], int nseg, uint_fast32_t *remainder) {
     uint_fast64_t rest = 0;
-    if (divisor != 1) {
+    if (divisor != 1 && nseg > 0) {
         if (divisor > number[nseg - 1]) {
             --nseg;
             rest = number[nseg];
@@ -161,7 +161,7 @@ static int beans_long_mul(uint_fast32_t factor, uint_least32_t number[], int nse
 
 static int beans_long_shr(int shift, uint_least32_t number[], int nseg, uint_fast32_t *remainder) {
     uint_fast32_t rest = 0;
-    if (shift != 0) {
+    if (shift != 0 && nseg > 0) {
         uint_fast32_t mask = (1 << shift) - 1;
         if (mask >= number[nseg - 1]) {
             --nseg;
@@ -278,6 +278,7 @@ int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[],
     
     int p = len;
     result[n] = cumulf[bytes[--p]];
+    //printf(" ...%.2x %.2x %.2x, %d", bytes[p - 2], bytes[p - 1], bytes[p], result[n]);
     int nseg = 1;
     while (p > 0) {
         unsigned char b = bytes[--p];
@@ -292,15 +293,15 @@ int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[],
         else {
             nseg = beans_long_div(f, result + n, nseg, &rest);
         }
-        if (n + nseg + 1 >= size) {
+        if (nseg == 0) {
+            nseg = 1;
+        }
+        else if (n + nseg + 1 >= size) {
             return 0;
         }
         nseg = beans_long_shl(BEANS_FREQ_BITS, result + n, nseg);
         
         result[n] |= cumulf[b] + rest;
-        if (nseg == 0) {
-            nseg = 1;
-        }
     }
     return (nseg + n);
 }
@@ -388,9 +389,17 @@ void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nse
             else {
                 nseg = beans_long_mul(f, code + n, nseg);
             }
-            code[n] += rest - cumulf[b];
             if (nseg == 0 && rest != cumulf[b]) {
+                code[n] = rest - cumulf[b];
                 nseg = 1;
+            }
+            else {
+                code[n] += rest - cumulf[b];
+            }
+        }
+        else {
+            if (nseg > 0) {
+                printf("Decoded %.2x at position %d (nseg=%d rest=%u lowest=%u)\n", b, i, nseg, rest, code[n]);
             }
         }
     }
