@@ -293,15 +293,18 @@ int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[],
         else {
             nseg = beans_long_div(f, result + n, nseg, &rest);
         }
-        if (nseg == 0) {
+        
+        if (nseg > 0) {
+            if (n + nseg + 1 >= size) {
+                return 0;
+            }
+            nseg = beans_long_shl(BEANS_FREQ_BITS, result + n, nseg);
+            result[n] |= cumulf[b] + rest;
+        }
+        else {
+            result[n] = cumulf[b] + rest;
             nseg = 1;
         }
-        else if (n + nseg + 1 >= size) {
-            return 0;
-        }
-        nseg = beans_long_shl(BEANS_FREQ_BITS, result + n, nseg);
-        
-        result[n] |= cumulf[b] + rest;
     }
     return (nseg + n);
 }
