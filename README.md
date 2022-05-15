@@ -1,8 +1,9 @@
-![QOI Logo](https://qoiformat.org/qoi-logo.svg)
 
-# QOI - The “Quite OK Image Format” for fast, lossless image compression
+# SQOA - The fast image compression which losslessly squashes image size
 
 Single-file MIT licensed library for C/C++
+
+SQOA is based on QOI but the formats are not compatible. 
 
 See [qoi.h](https://github.com/phoboslab/qoi/blob/master/qoi.h) for
 the documentation and format specification.
