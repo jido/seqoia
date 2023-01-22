@@ -521,7 +521,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
         unsigned char op[8];
         int op_len = 0;
         signed char va;
-        int index_pos;
+        int index_pos, px_update;
         sqoa_rgba_t px_cached;
 
         px.rgba.r = pixels[px_pos + 0];
@@ -532,13 +532,15 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             px.rgba.a = pixels[px_pos + 3];
         }
         
-        if (px_prev.v == px.v) {
+        px_update = px_prev.v != px.v;
+        
+        if (!px_update) {
             run++;
+            if (px_pos == px_end || run == SQOA_RUN_LIMIT) {
+                px_update = 1;
+            }
         }
-        if (
-            run == SQOA_RUN_LIMIT || 
-            (run > 0 && (px_pos == px_end || px_prev.v != px.v))
-        ) {
+        if (run > 0 && px_update) {
             if (run < 64) {
                 op[op_len++] = SQOA_OP_RUN | (run - 1);
             }
@@ -553,7 +555,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             }
             run = 0;
         }
-        if (px_prev.v != px.v) {
+        if (px_update) {
             index_pos = SQOA_COLOR_HASH(px) % 64;
             px_cached = index[index_pos];
             va = px.rgba.a - px_cached.rgba.a;
@@ -747,7 +749,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                     l = bytes[p++];
                     block_len = SQOA_BLOCK_LEN(h, l);
                     if (SQOA_BLOCK_COMPT(h, l) != SQOA_UNCOMPRESSED) {
-                        printf("Unknown block type at 0x%x, len=%d\n", p - 2, block_len);
+                        fprintf(stderr, "Unknown block type at 0x%x, len=%d\n", p - 2, block_len);
                         free(pixels);
                         return NULL;
                     }
