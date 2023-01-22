@@ -71,8 +71,6 @@ extern "C" {
 #include <stdint.h>
 
 #define BEANS_NUM_SYMBOLS 256
-#define BEANS_CODE_LEN(e) (e & 0x1ffffff)
-#define BEANS_FT_LEN(e) (e >> 25)
 
 /* Compress a byte buffer in memory to an array of integers
 
@@ -81,8 +79,7 @@ Inputs: the byte buffer, its length, an allocated array of integers, its size,
  calculated from the byte buffer data and stored in compressed form together 
  with the rest of the data]
 
-Output: compressed length information. Use BEANS_CODE_LEN and BEANS_FT_LEN
- to split the value between overall length and counts (frequency table) length
+Output: compressed array length
  The returned value is 0 in case of error (e.g. array size too small).
 */
 int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[], int size, const uint_least32_t *counts);
@@ -155,6 +152,19 @@ static int beans_long_mul(uint_fast32_t factor, uint_least32_t number[], int nse
             number[nseg] = carry;
             ++nseg;
         }
+    }
+    return nseg;
+}
+
+static int beans_long_add(uint_fast32_t amount, uint_least32_t number[], int nseg) {
+    for (int i = 0; amount != 0 && i < nseg; ++i) {
+        uint_fast64_t segment = amount + (uint_fast64_t) number[i];
+        amount = segment >> 32;
+        number[i] = segment & UINT32_MAX;
+    }
+    if (amount != 0) {
+        number[nseg] = amount;
+        ++nseg;
     }
     return nseg;
 }
@@ -278,7 +288,6 @@ int beans_compress(const unsigned char *bytes, int len, uint_least32_t result[],
     
     int p = len;
     result[n] = cumulf[bytes[--p]];
-    //printf(" ...%.2x %.2x %.2x, %d", bytes[p - 2], bytes[p - 1], bytes[p], result[n]);
     int nseg = 1;
     while (p > 0) {
         unsigned char b = bytes[--p];
@@ -397,7 +406,7 @@ void beans_inflate(unsigned char *bytes, int len, uint_least32_t code[], int nse
                 nseg = 1;
             }
             else {
-                code[n] += rest - cumulf[b];
+                nseg = beans_long_add(rest - cumulf[b], code + n, nseg);
             }
         }
         else {
@@ -447,4 +456,4 @@ void beans_normalise_freqs(const uint_least32_t freq[BEANS_NUM_SYMBOLS], uint_le
     }
 }
 
-#endif /*ifdef SQOA_IMPLEMENTATION*/
+#endif /*ifdef BEANS_IMPLEMENTATION*/

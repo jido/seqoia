@@ -718,7 +718,6 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
     px.rgba.b = 0;
     px.rgba.a = 255;
 
-    int block_size;
     block_len = 0;
     block_pos = 0;
     for (px_pos = 0; px_pos < px_len; px_pos += channels) {
@@ -730,6 +729,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 #ifdef SQOA_COMPRESSION
                 h = bytes[p];
                 if (SQOA_BLOCK_COMPT(h, 0) == SQOA_COMP_BEANS) {
+                    int block_size;
                     uint_least32_t data[SQOA_BLOCK_SIZE >> 2];
                     unsigned int info = sqoa_read_32(bytes, &p);
                     l = (info >> 16) & 0xff;
@@ -738,10 +738,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                     for (int i = 0; i < block_size; ++i) {
                         data[i] = sqoa_read_32(bytes, &p);
                     }
-                    debug_last = data[block_size - 1];
                     beans_inflate(block, block_len, data, block_size, NULL);
-                    //printf("Inflate: %d codes -> %d bytes Sample: %.2x %.2x %.2x %.2x ... %.2x %.2x %.2x %.2x\n", block_size, block_len,
-                    //     block[0], block[1], block[2], block[3], block[block_len - 4], block[block_len - 3], block[block_len - 2], block[block_len - 1]);
                     block_pos = 0;
                 }
                 else {
@@ -749,7 +746,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                     l = bytes[p++];
                     block_len = SQOA_BLOCK_LEN(h, l);
                     if (SQOA_BLOCK_COMPT(h, l) != SQOA_UNCOMPRESSED) {
-                        printf("Unknown block type at %x\n", p - 2);
+                        printf("Unknown block type at 0x%x\n", p - 2);
                         free(pixels);
                         return NULL;
                     }
@@ -763,7 +760,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 l = bytes[p++];
                 block_len = SQOA_BLOCK_LEN(h, l);
                 if (SQOA_BLOCK_COMPT(h, l) != SQOA_UNCOMPRESSED) {
-                    printf("Unknown block type at %x\n", p - 2);
+                    printf("Unknown block type at 0x%x\n", p - 2);
                     free(pixels);
                     return NULL;
                 }
@@ -773,7 +770,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 #endif
             }
             else if (block_pos > block_len) {
-                printf("Data error: position past block end (block at %x last code=%.4x last op=%.2x)\n", p - block_size * 4, debug_last, b1);
+                printf("Data error: position past block end (curr pos=0x%x last op=%.2x)\n", p, b1);
                 free(pixels);
                 return NULL;
             }
