@@ -735,8 +735,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                     int block_size;
                     uint_least32_t data[SQOA_BLOCK_SIZE >> 2];
                     unsigned int info = sqoa_read_32(bytes, &p);
-                    l = (info >> 16) & 0xff;
-                    block_size = SQOA_BLOCK_LEN(h, l) >> 2;
+                    block_size = (info >> 18) & 0x3ff;
                     block_len = info & 0xffff;
                     for (int i = 0; i < block_size; ++i) {
                         data[i] = sqoa_read_32(bytes, &p);
