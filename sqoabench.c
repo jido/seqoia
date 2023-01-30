@@ -1,14 +1,15 @@
 /*
 
+Adapted from qoibench.c:
 Copyright (c) 2021, Dominic Szablewski - https://phoboslab.org
 SPDX-License-Identifier: MIT
 
 
-Simple benchmark suite for png, stbi and qoi
+Simple benchmark suite for png, stbi and sqoa
 
 Requires libpng, "stb_image.h" and "stb_image_write.h"
 Compile with: 
-	gcc qoibench.c -std=gnu99 -lpng -O3 -o qoibench 
+	gcc sqoabench.c -std=gnu99 -lpng -O3 -o sqoabench 
 
 */
 
@@ -24,8 +25,8 @@ Compile with:
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#define QOI_IMPLEMENTATION
-#include "qoi.h"
+#define SQOA_IMPLEMENTATION
+#include "seqoia.h"
 
 
 
@@ -318,7 +319,7 @@ typedef struct {
 	int h;
 	benchmark_lib_result_t libpng;
 	benchmark_lib_result_t stbi;
-	benchmark_lib_result_t qoi;
+	benchmark_lib_result_t sqoa;
 } benchmark_result_t;
 
 
@@ -331,9 +332,9 @@ void benchmark_print_result(benchmark_result_t res) {
 	res.stbi.encode_time /= res.count;
 	res.stbi.decode_time /= res.count;
 	res.stbi.size /= res.count;
-	res.qoi.encode_time /= res.count;
-	res.qoi.decode_time /= res.count;
-	res.qoi.size /= res.count;
+	res.sqoa.encode_time /= res.count;
+	res.sqoa.decode_time /= res.count;
+	res.sqoa.size /= res.count;
 
 	double px = res.px;
 	printf("        decode ms   encode ms   decode mpps   encode mpps   size kb    rate\n");
@@ -358,13 +359,13 @@ void benchmark_print_result(benchmark_result_t res) {
 		);
 	}
 	printf(
-		"qoi:     %8.1f    %8.1f      %8.2f      %8.2f  %8ld   %4.1f%%\n", 
-		(double)res.qoi.decode_time/1000000.0,
-		(double)res.qoi.encode_time/1000000.0,
-		(res.qoi.decode_time > 0 ? px / ((double)res.qoi.decode_time/1000.0) : 0),
-		(res.qoi.encode_time > 0 ? px / ((double)res.qoi.encode_time/1000.0) : 0),
-		res.qoi.size/1024,
-		((double)res.qoi.size/(double)res.raw_size) * 100.0
+		"sqoa:    %8.1f    %8.1f      %8.2f      %8.2f  %8ld   %4.1f%%\n", 
+		(double)res.sqoa.decode_time/1000000.0,
+		(double)res.sqoa.encode_time/1000000.0,
+		(res.sqoa.decode_time > 0 ? px / ((double)res.sqoa.decode_time/1000.0) : 0),
+		(res.sqoa.encode_time > 0 ? px / ((double)res.sqoa.encode_time/1000.0) : 0),
+		res.sqoa.size/1024,
+		((double)res.sqoa.size/(double)res.raw_size) * 100.0
 	);
 	printf("\n");
 }
@@ -388,12 +389,12 @@ void benchmark_print_result(benchmark_result_t res) {
 
 benchmark_result_t benchmark_image(const char *path) {
 	int encoded_png_size;
-	int encoded_qoi_size;
+	int encoded_sqoa_size;
 	int w;
 	int h;
 	int channels;
 
-	// Load the encoded PNG, encoded QOI and raw pixels into memory
+	// Load the encoded PNG, encoded SQOA and raw pixels into memory
 	if(!stbi_info(path, &w, &h, &channels)) {
 		ERROR("Error decoding header %s", path);
 	}
@@ -404,26 +405,26 @@ benchmark_result_t benchmark_image(const char *path) {
 
 	void *pixels = (void *)stbi_load(path, &w, &h, NULL, channels);
 	void *encoded_png = fload(path, &encoded_png_size);
-	void *encoded_qoi = qoi_encode(pixels, &(qoi_desc){
+	void *encoded_sqoa = sqoa_encode(pixels, &(sqoa_desc){
 			.width = w,
 			.height = h, 
 			.channels = channels,
-			.colorspace = QOI_SRGB
-		}, &encoded_qoi_size);
+			.colorspace = SQOA_SRGB
+		}, &encoded_sqoa_size);
 
-	if (!pixels || !encoded_qoi || !encoded_png) {
+	if (!pixels || !encoded_sqoa || !encoded_png) {
 		ERROR("Error encoding %s", path);
 	}
 
-	// Verify QOI Output
+	// Verify SQOA Output
 
 	if (!opt_noverify) {
-		qoi_desc dc;
-		void *pixels_qoi = qoi_decode(encoded_qoi, encoded_qoi_size, &dc, channels);
-		if (memcmp(pixels, pixels_qoi, w * h * channels) != 0) {
-			ERROR("QOI roundtrip pixel mismatch for %s", path);
+		sqoa_desc dc;
+		void *pixels_sqoa = sqoa_decode(encoded_sqoa, encoded_sqoa_size, &dc, channels);
+		if (memcmp(pixels, pixels_sqoa, w * h * channels) != 0) {
+			ERROR("SQOA roundtrip pixel mismatch for %s", path);
 		}
-		free(pixels_qoi);
+		free(pixels_sqoa);
 	}
 
 
@@ -453,9 +454,9 @@ benchmark_result_t benchmark_image(const char *path) {
 			});
 		}
 
-		BENCHMARK_FN(opt_nowarmup, opt_runs, res.qoi.decode_time, {
-			qoi_desc desc;
-			void *dec_p = qoi_decode(encoded_qoi, encoded_qoi_size, &desc, 4);
+		BENCHMARK_FN(opt_nowarmup, opt_runs, res.sqoa.decode_time, {
+			sqoa_desc desc;
+			void *dec_p = sqoa_decode(encoded_sqoa, encoded_sqoa_size, &desc, 4);
 			free(dec_p);
 		});
 	}
@@ -478,22 +479,22 @@ benchmark_result_t benchmark_image(const char *path) {
 			});
 		}
 
-		BENCHMARK_FN(opt_nowarmup, opt_runs, res.qoi.encode_time, {
+		BENCHMARK_FN(opt_nowarmup, opt_runs, res.sqoa.encode_time, {
 			int enc_size;
-			void *enc_p = qoi_encode(pixels, &(qoi_desc){
+			void *enc_p = sqoa_encode(pixels, &(sqoa_desc){
 				.width = w,
 				.height = h, 
 				.channels = channels,
-				.colorspace = QOI_SRGB
+				.colorspace = SQOA_SRGB
 			}, &enc_size);
-			res.qoi.size = enc_size;
+			res.sqoa.size = enc_size;
 			free(enc_p);
 		});
 	}
 
 	free(pixels);
 	free(encoded_png);
-	free(encoded_qoi);
+	free(encoded_sqoa);
 
 	return res;
 }
@@ -555,9 +556,9 @@ void benchmark_directory(const char *path, benchmark_result_t *grand_total) {
 		dir_total.stbi.encode_time += res.stbi.encode_time;
 		dir_total.stbi.decode_time += res.stbi.decode_time;
 		dir_total.stbi.size += res.stbi.size;
-		dir_total.qoi.encode_time += res.qoi.encode_time;
-		dir_total.qoi.decode_time += res.qoi.decode_time;
-		dir_total.qoi.size += res.qoi.size;
+		dir_total.sqoa.encode_time += res.sqoa.encode_time;
+		dir_total.sqoa.decode_time += res.sqoa.decode_time;
+		dir_total.sqoa.size += res.sqoa.size;
 
 		grand_total->count++;
 		grand_total->raw_size += res.raw_size;
@@ -568,9 +569,9 @@ void benchmark_directory(const char *path, benchmark_result_t *grand_total) {
 		grand_total->stbi.encode_time += res.stbi.encode_time;
 		grand_total->stbi.decode_time += res.stbi.decode_time;
 		grand_total->stbi.size += res.stbi.size;
-		grand_total->qoi.encode_time += res.qoi.encode_time;
-		grand_total->qoi.decode_time += res.qoi.decode_time;
-		grand_total->qoi.size += res.qoi.size;
+		grand_total->sqoa.encode_time += res.sqoa.encode_time;
+		grand_total->sqoa.decode_time += res.sqoa.decode_time;
+		grand_total->sqoa.size += res.sqoa.size;
 	}
 	closedir(dir);
 
@@ -582,18 +583,18 @@ void benchmark_directory(const char *path, benchmark_result_t *grand_total) {
 
 int main(int argc, char **argv) {
 	if (argc < 3) {
-		printf("Usage: qoibench <iterations> <directory> [options]\n");
+		printf("Usage: sqoabench <iterations> <directory> [options]\n");
 		printf("Options:\n");
 		printf("    --nowarmup ... don't perform a warmup run\n");
 		printf("    --nopng ...... don't run png encode/decode\n");
-		printf("    --noverify ... don't verify qoi roundtrip\n");
+		printf("    --noverify ... don't verify sqoa roundtrip\n");
 		printf("    --noencode ... don't run encoders\n");
 		printf("    --nodecode ... don't run decoders\n");
 		printf("    --norecurse .. don't descend into directories\n");
 		printf("    --onlytotals . don't print individual image results\n");
 		printf("Examples\n");
-		printf("    qoibench 10 images/textures/\n");
-		printf("    qoibench 1 images/textures/ --nopng --nowarmup\n");
+		printf("    sqoabench 10 images/textures/\n");
+		printf("    sqoabench 1 images/textures/ --nopng --nowarmup\n");
 		exit(1);
 	}
 

@@ -347,6 +347,7 @@ Implementation */
 #define SQOA_OP_DIFF   0x40 /* 01xxxxxx */
 #define SQOA_OP_LUMA   0x80 /* 10xxxxxx */
 #define SQOA_OP_RUN    0xc0 /* 11xxxxxx */
+#define SQOA_OP_ALPHA  0x6a /* 01101010 */
 #define SQOA_OP_RGB    0xfe /* 11111110 */
 #define SQOA_OP_RGBA   0xff /* 11111111 */
 
@@ -580,6 +581,11 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 		else if (p < chunks_len) {
 			int b1 = bytes[p++];
 
+            if (b1 == SQOA_OP_ALPHA) {
+                px.rgba.a = bytes[p++];
+                b1 = bytes[p++];
+            }
+            
 			if (b1 == SQOA_OP_RGB) {
 				px.rgba.r = bytes[p++];
 				px.rgba.g = bytes[p++];
@@ -592,7 +598,13 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 				px.rgba.a = bytes[p++];
 			}
 			else if ((b1 & SQOA_MASK_2) == SQOA_OP_INDEX) {
-				px = index[b1];
+                sqoa_rgba_t cached = index[b1];
+                if (cached.v == px.v) {
+                    run = 32 << bytes[p++];
+                }
+                else {
+                    px = cached;
+                }
 			}
 			else if ((b1 & SQOA_MASK_2) == SQOA_OP_DIFF) {
 				px.rgba.r += ((b1 >> 4) & 0x03) - 2;
