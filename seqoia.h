@@ -353,6 +353,7 @@ Implementation */
 
 #define SQOA_MASK_2    0xc0 /* 11000000 */
 
+#define SQOA_OP_BIGRUN(I) (SQOA_OP_INDEX | I)
 #define SQOA_COLOR_HASH(C) (C.rgba.r*3 + C.rgba.g*5 + C.rgba.b*7 + C.rgba.a*11)
 #define SQOA_MAGIC \
 	(((unsigned int)'S') << 24 | ((unsigned int)'q') << 16 | \
@@ -392,7 +393,7 @@ static unsigned int sqoa_read_32(const unsigned char *bytes, int *p) {
 
 void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 	int i, max_size, p, run;
-	int px_len, px_end, px_pos, channels;
+	int px_len, px_end, px_pos, channels, index_pos;
 	unsigned char *bytes;
 	const unsigned char *pixels;
 	sqoa_rgba_t index[64];
@@ -433,8 +434,8 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 	px_prev.rgba.r = 0;
 	px_prev.rgba.g = 0;
 	px_prev.rgba.b = 0;
-	px_prev.rgba.a = 255;
-	px = px_prev;
+	px_prev.rgba.a = 0;
+    index_pos = 0;
 
 	px_len = desc->width * desc->height * desc->channels;
 	px_end = px_len - desc->channels;
@@ -451,17 +452,24 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 
 		if (px.v == px_prev.v) {
 			run++;
-			if (run == 62 || px_pos == px_end) {
-				bytes[p++] = SQOA_OP_RUN | (run - 1);
-				run = 0;
-			}
 		}
 		else {
-			int index_pos;
-
 			if (run > 0) {
-				bytes[p++] = SQOA_OP_RUN | (run - 1);
-				run = 0;
+                for (int shift = 6; shift < 32 && (run >> shift) > 0; shift++) {
+                    if (run & (1<<shift)) {
+                        bytes[p++] = SQOA_OP_BIGRUN(index_pos);
+                        bytes[p++] = shift - 5;
+                    }
+                }
+                run = run & 63;
+                if (run > 0) {
+                    if (run == 63) {
+                        bytes[p++] = SQOA_OP_RUN;
+                        run--;
+                    }
+    				bytes[p++] = SQOA_OP_RUN | (run - 1);
+    				run = 0;
+                }
 			}
 
 			index_pos = SQOA_COLOR_HASH(px) % 64;
@@ -470,16 +478,40 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 				bytes[p++] = SQOA_OP_INDEX | index_pos;
 			}
 			else {
+				signed char vr = px.rgba.r - px_prev.rgba.r;
+				signed char vg = px.rgba.g - px_prev.rgba.g;
+				signed char vb = px.rgba.b - px_prev.rgba.b;
+
+				signed char vg_r = vr - vg;
+				signed char vg_b = vb - vg;
+
 				index[index_pos] = px;
 
-				if (px.rgba.a == px_prev.rgba.a) {
-					signed char vr = px.rgba.r - px_prev.rgba.r;
-					signed char vg = px.rgba.g - px_prev.rgba.g;
-					signed char vb = px.rgba.b - px_prev.rgba.b;
-
-					signed char vg_r = vr - vg;
-					signed char vg_b = vb - vg;
-
+				if (
+					vg_r <  -8 || vg_r >  7 ||
+					vg   < -32 || vg   > 31 ||
+					vg_b <  -8 || vg_b >  7
+                ) {
+    			    if (px.rgba.a == px_prev.rgba.a) {
+    					bytes[p++] = SQOA_OP_RGB;
+    					bytes[p++] = px.rgba.r;
+    					bytes[p++] = px.rgba.g;
+    					bytes[p++] = px.rgba.b;
+    				}
+    				else {
+    					bytes[p++] = SQOA_OP_RGBA;
+    					bytes[p++] = px.rgba.r;
+    					bytes[p++] = px.rgba.g;
+    					bytes[p++] = px.rgba.b;
+    					bytes[p++] = px.rgba.a;
+    				}
+                }
+                else {
+    				if (px.rgba.a != px_prev.rgba.a) {
+    				    bytes[p++] = SQOA_OP_ALPHA;
+                        bytes[p++] = px.rgba.a;
+    				}
+                    
 					if (
 						vr > -3 && vr < 2 &&
 						vg > -3 && vg < 2 &&
@@ -487,32 +519,23 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 					) {
 						bytes[p++] = SQOA_OP_DIFF | (vr + 2) << 4 | (vg + 2) << 2 | (vb + 2);
 					}
-					else if (
-						vg_r >  -9 && vg_r <  8 &&
-						vg   > -33 && vg   < 32 &&
-						vg_b >  -9 && vg_b <  8
-					) {
+					else {
 						bytes[p++] = SQOA_OP_LUMA     | (vg   + 32);
 						bytes[p++] = (vg_r + 8) << 4 | (vg_b +  8);
 					}
-					else {
-						bytes[p++] = SQOA_OP_RGB;
-						bytes[p++] = px.rgba.r;
-						bytes[p++] = px.rgba.g;
-						bytes[p++] = px.rgba.b;
-					}
-				}
-				else {
-					bytes[p++] = SQOA_OP_RGBA;
-					bytes[p++] = px.rgba.r;
-					bytes[p++] = px.rgba.g;
-					bytes[p++] = px.rgba.b;
-					bytes[p++] = px.rgba.a;
-				}
+                }
 			}
 		}
 		px_prev = px;
 	}
+    
+    if (run > 63) {
+        bytes[p++] = SQOA_OP_BIGRUN(index_pos);
+        bytes[p++] = 31 - 5;
+    }
+    else if (run > 0) {
+        bytes[p++] = SQOA_OP_RUN | (run - 1);
+    }
 
 	for (i = 0; i < (int)sizeof(sqoa_padding); i++) {
 		bytes[p++] = sqoa_padding[i];
@@ -528,7 +551,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 	unsigned char *pixels;
 	sqoa_rgba_t index[64];
 	sqoa_rgba_t px;
-	int px_len, chunks_len, px_pos;
+	int px_len, chunks_len, px_pos, index_pos;
 	int p = 0, run = 0;
 
 	if (
@@ -571,7 +594,8 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 	px.rgba.r = 0;
 	px.rgba.g = 0;
 	px.rgba.b = 0;
-	px.rgba.a = 255;
+	px.rgba.a = 0;
+    index_pos = 0;
 
 	chunks_len = size - (int)sizeof(sqoa_padding);
 	for (px_pos = 0; px_pos < px_len; px_pos += channels) {
@@ -599,8 +623,8 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 			}
 			else if ((b1 & SQOA_MASK_2) == SQOA_OP_INDEX) {
                 sqoa_rgba_t cached = index[b1];
-                if (cached.v == px.v) {
-                    run = 32 << bytes[p++];
+                if (b1 == index_pos && cached.v == px.v) {
+                    run = (32 << bytes[p++]) - 1;
                 }
                 else {
                     px = cached;
@@ -622,7 +646,8 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 				run = (b1 & 0x3f);
 			}
 
-			index[SQOA_COLOR_HASH(px) % 64] = px;
+			index_pos = SQOA_COLOR_HASH(px) % 64;
+            index[index_pos] = px;
 		}
 
 		pixels[px_pos + 0] = px.rgba.r;

@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
 
 		pixels = (void *)stbi_load(argv[1], &w, &h, NULL, channels);
 	}
-	else if (STR_ENDS_WITH(argv[1], ".sqoa")) {
+	else if (STR_ENDS_WITH(argv[1], ".sqoa") || STR_ENDS_WITH(argv[1], ".qoi")) {
 		sqoa_desc desc;
 		pixels = sqoa_read(argv[1], &desc, 0);
 		channels = desc.channels;
