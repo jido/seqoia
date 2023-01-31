@@ -12,9 +12,9 @@ fits in about 400 lines of C.
 
 ## Example Usage
 
-- [sqoaconv.c](https://github.com/jido/seqoia/blob/master/sqoaconv.c)
+- [sqoaconv.c](https://github.com/jido/seqoia/blob/sqoa/sqoaconv.c)
 converts between png <> sqoa
- - [sqoabench.c](https://github.com/jido/seqoia/blob/master/sqoabench.c)
+ - [sqoabench.c](https://github.com/jido/seqoia/blob/sqoa/sqoabench.c)
 a simple wrapper to benchmark stbi, libpng and sqoa
 
 
@@ -22,6 +22,29 @@ a simple wrapper to benchmark stbi, libpng and sqoa
 
 The recommended MIME type for SQOA images is `image/sqoa`.
 The recommended file extension for SQOA images is `.sqoa`
+
+
+## Benchmark results
+
+Tested on Apple MacBook Air M1
+
+Compiler command:
+
+```
+clang -o sqoabench -I/opt/homebrew/include -L/opt/homebrew/lib -lpng -std=gnu99 -O3 sqoabench.c
+```
+
+Benchmark command:
+
+```
+./sqoabench 10 ../qoi/images --onlytotals
+```
+
+**Results:**
+
+> [bench10.txt](https://github.com/jido/seqoia/blob/sqoa/bench10.txt)
+
+_Seqoia_ compresses better than _QOI_ on synthetic images like icons.
 
 
 ## Limitations
