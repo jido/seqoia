@@ -329,16 +329,16 @@ typedef struct {
 
 
 void benchmark_print_result(benchmark_result_t res) {
-    res.px /= res.count;
-    res.libpng.encode_time /= res.count;
-    res.libpng.decode_time /= res.count;
-    res.stbi.encode_time /= res.count;
-    res.stbi.decode_time /= res.count;
-    res.qoi.encode_time /= res.count;
-    res.qoi.decode_time /= res.count;
-    res.sqoa.encode_time /= res.count;
-    res.sqoa.decode_time /= res.count;
     if (opt_noaverage == 0) {
+        res.px /= res.count;
+        res.libpng.encode_time /= res.count;
+        res.libpng.decode_time /= res.count;
+        res.stbi.encode_time /= res.count;
+        res.stbi.decode_time /= res.count;
+        res.qoi.encode_time /= res.count;
+        res.qoi.decode_time /= res.count;
+        res.sqoa.encode_time /= res.count;
+        res.sqoa.decode_time /= res.count;
         res.raw_size /= res.count;
         res.libpng.size /= res.count;
         res.stbi.size /= res.count;
@@ -347,10 +347,10 @@ void benchmark_print_result(benchmark_result_t res) {
     }
 
     double px = res.px;
-    printf("        decode ms   encode ms   decode mpps   encode mpps   size kb    rate\n");
+    printf("         decode ms   encode ms   decode mpps   encode mpps   size kb    rate\n");
     if (!opt_nopng) {
         printf(
-            "libpng:  %8.1f    %8.1f      %8.2f      %8.2f  %8llu   %4.1f%%\n", 
+            "libpng: %10.1f  %10.1f      %8.2f      %8.2f %9llu   %4.1f%%\n", 
             (double)res.libpng.decode_time/1000000.0, 
             (double)res.libpng.encode_time/1000000.0, 
             (res.libpng.decode_time > 0 ? px / ((double)res.libpng.decode_time/1000.0) : 0),
@@ -359,7 +359,7 @@ void benchmark_print_result(benchmark_result_t res) {
             ((double)res.libpng.size/(double)res.raw_size) * 100.0
         );
         printf(
-            "stbi:    %8.1f    %8.1f      %8.2f      %8.2f  %8llu   %4.1f%%\n", 
+            "stbi:   %10.1f  %10.1f      %8.2f      %8.2f %9llu   %4.1f%%\n", 
             (double)res.stbi.decode_time/1000000.0,
             (double)res.stbi.encode_time/1000000.0,
             (res.stbi.decode_time > 0 ? px / ((double)res.stbi.decode_time/1000.0) : 0),
@@ -369,7 +369,7 @@ void benchmark_print_result(benchmark_result_t res) {
         );
     }
     printf(
-        "qoi:     %8.1f    %8.1f      %8.2f      %8.2f  %8llu   %4.1f%%\n", 
+        "qoi:    %10.1f  %10.1f      %8.2f      %8.2f %9llu   %4.1f%%\n", 
         (double)res.qoi.decode_time/1000000.0,
         (double)res.qoi.encode_time/1000000.0,
         (res.qoi.decode_time > 0 ? px / ((double)res.qoi.decode_time/1000.0) : 0),
@@ -378,7 +378,7 @@ void benchmark_print_result(benchmark_result_t res) {
         ((double)res.qoi.size/(double)res.raw_size) * 100.0
     );
     printf(
-        "sqoa:    %8.1f    %8.1f      %8.2f      %8.2f  %8llu   %4.1f%%\n", 
+        "sqoa:   %10.1f  %10.1f      %8.2f      %8.2f %9llu   %4.1f%%\n", 
         (double)res.sqoa.decode_time/1000000.0,
         (double)res.sqoa.encode_time/1000000.0,
         (res.sqoa.decode_time > 0 ? px / ((double)res.sqoa.decode_time/1000.0) : 0),
@@ -642,7 +642,7 @@ int main(int argc, char **argv) {
         printf("    --noencode ... don't run encoders\n");
         printf("    --nodecode ... don't run decoders\n");
         printf("    --norecurse .. don't descend into directories\n");
-        printf("    --noaverage .. don't average file sizes\n");
+        printf("    --noaverage .. don't average times and file sizes\n");
         printf("    --onlytotals . don't print individual image results\n");
         printf("Examples\n");
         printf("    sqoabench 10 images/textures/\n");
