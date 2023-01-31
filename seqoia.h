@@ -147,7 +147,7 @@ pixels is stored as "1" since 64 is equal to 1<<6.
 8-bit tag b01101010
 8-bit alpha channel value
 
-Updates the alpha channel only. The alpha value is used for next operation.
+Updates the alpha channel only. The alpha value is applied to the last pixel.
 
 
 .- SQOA_OP_DIFF ----------.
@@ -456,6 +456,23 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
         }
         else {
             if (run > 0) {
+                /*
+                for (int shift = 6; shift < 32 && (run >> shift) != 0; shift++) {
+                    if (run & (1<<shift)) {
+                        bytes[p++] = SQOA_OP_BIGRUN(index_pos);
+                        bytes[p++] = shift - 5;
+                    }
+                }
+                run = run % 64;
+                if (run == 63) {
+                    bytes[p++] = SQOA_OP_RUN | 61;
+                    bytes[p++] = SQOA_OP_RUN;
+                }
+                else if (run > 0) {
+                    bytes[p++] = SQOA_OP_RUN | (run - 1);
+                }
+                run = 0;
+                */
                 for (int shift = 6; shift < 32 && (run >> shift) > 0; shift++) {
                     if (run & (1<<shift)) {
                         bytes[p++] = SQOA_OP_BIGRUN(index_pos);
@@ -508,12 +525,10 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                     }
                 }
                 else {
-                    if (px.rgba.a != px_prev.rgba.a) {
-                        bytes[p++] = SQOA_OP_ALPHA;
-                        bytes[p++] = px.rgba.a;
-                    }
-                    
-                    if (
+                    if (vr == 0 && vg == 0 && vb == 0) {
+                        bytes[p++] = SQOA_OP_RUN;
+                    }                    
+                    else if (
                         vr > -3 && vr < 2 &&
                         vg > -3 && vg < 2 &&
                         vb > -3 && vb < 2
@@ -524,13 +539,19 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                         bytes[p++] = SQOA_OP_LUMA     | (vg   + 32);
                         bytes[p++] = (vg_r + 8) << 4 | (vg_b +  8);
                     }
+                    
+                    if (px.rgba.a != px_prev.rgba.a) {
+                        //printf("alpha op at %x previous op=%x %x\n", p, bytes[p-2], bytes[p-1]);
+                        bytes[p++] = SQOA_OP_ALPHA;
+                        bytes[p++] = px.rgba.a;
+                    }
                 }
             }
         }
         px_prev = px;
     }
     
-    if (run > 63) {
+    if (run >= 63) {
         bytes[p++] = SQOA_OP_BIGRUN(index_pos);
         bytes[p++] = 31 - 5;
     }
@@ -606,11 +627,6 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
         else if (p < chunks_len) {
             int b1 = bytes[p++];
 
-            if (b1 == SQOA_OP_ALPHA) {
-                px.rgba.a = bytes[p++];
-                b1 = bytes[p++];
-            }
-            
             if (b1 == SQOA_OP_RGB) {
                 px.rgba.r = bytes[p++];
                 px.rgba.g = bytes[p++];
@@ -631,6 +647,9 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 }
             }
             else if ((b1 & SQOA_MASK_2) == SQOA_OP_DIFF) {
+                if (b1 == SQOA_OP_ALPHA) {
+                    fprintf(stderr, "unexpected alpha op at %x\n", p);
+                }
                 px.rgba.r += ((b1 >> 4) & 0x03) - 2;
                 px.rgba.g += ((b1 >> 2) & 0x03) - 2;
                 px.rgba.b += ( b1       & 0x03) - 2;
@@ -646,6 +665,11 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 run = (b1 & 0x3f);
             }
 
+            if (bytes[p] == SQOA_OP_ALPHA) {
+                p++;
+                px.rgba.a = bytes[p++];
+            }
+            
             index_pos = SQOA_COLOR_HASH(px) % 64;
             index[index_pos] = px;
         }
