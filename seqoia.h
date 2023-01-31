@@ -434,8 +434,8 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 	px_prev.rgba.r = 0;
 	px_prev.rgba.g = 0;
 	px_prev.rgba.b = 0;
-	px_prev.rgba.a = 0;
-    index_pos = 0;
+	px_prev.rgba.a = 255;
+    index_pos = SQOA_COLOR_HASH(px_prev) % 64;
 
 	px_len = desc->width * desc->height * desc->channels;
 	px_end = px_len - desc->channels;
@@ -461,7 +461,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                         bytes[p++] = shift - 5;
                     }
                 }
-                run = run & 63;
+                run = run % 64;
                 if (run > 0) {
                     if (run == 63) {
                         bytes[p++] = SQOA_OP_RUN;
@@ -594,8 +594,8 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 	px.rgba.r = 0;
 	px.rgba.g = 0;
 	px.rgba.b = 0;
-	px.rgba.a = 0;
-    index_pos = 0;
+	px.rgba.a = 255;
+    index_pos = SQOA_COLOR_HASH(px) % 64;
 
 	chunks_len = size - (int)sizeof(sqoa_padding);
 	for (px_pos = 0; px_pos < px_len; px_pos += channels) {
@@ -622,12 +622,11 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 				px.rgba.a = bytes[p++];
 			}
 			else if ((b1 & SQOA_MASK_2) == SQOA_OP_INDEX) {
-                sqoa_rgba_t cached = index[b1];
-                if (b1 == index_pos && cached.v == px.v) {
+                if (b1 == index_pos) {
                     run = (32 << bytes[p++]) - 1;
                 }
                 else {
-                    px = cached;
+                    px = index[b1];
                 }
 			}
 			else if ((b1 & SQOA_MASK_2) == SQOA_OP_DIFF) {
