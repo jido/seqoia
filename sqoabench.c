@@ -305,6 +305,7 @@ int opt_noverify = 0;
 int opt_nodecode = 0;
 int opt_noencode = 0;
 int opt_norecurse = 0;
+int opt_noaverage = 0;
 int opt_onlytotals = 0;
 
 
@@ -329,19 +330,21 @@ typedef struct {
 
 void benchmark_print_result(benchmark_result_t res) {
     res.px /= res.count;
-    //res.raw_size /= res.count;
     res.libpng.encode_time /= res.count;
     res.libpng.decode_time /= res.count;
-    //res.libpng.size /= res.count;
     res.stbi.encode_time /= res.count;
     res.stbi.decode_time /= res.count;
-    //res.stbi.size /= res.count;
     res.qoi.encode_time /= res.count;
     res.qoi.decode_time /= res.count;
-    //res.qoi.size /= res.count;
     res.sqoa.encode_time /= res.count;
     res.sqoa.decode_time /= res.count;
-    //res.sqoa.size /= res.count;
+    if (opt_noaverage == 0) {
+        res.raw_size /= res.count;
+        res.libpng.size /= res.count;
+        res.stbi.size /= res.count;
+        res.qoi.size /= res.count;
+        res.sqoa.size /= res.count;
+    }
 
     double px = res.px;
     printf("        decode ms   encode ms   decode mpps   encode mpps   size kb    rate\n");
@@ -639,6 +642,7 @@ int main(int argc, char **argv) {
         printf("    --noencode ... don't run encoders\n");
         printf("    --nodecode ... don't run decoders\n");
         printf("    --norecurse .. don't descend into directories\n");
+        printf("    --noaverage .. don't average file sizes\n");
         printf("    --onlytotals . don't print individual image results\n");
         printf("Examples\n");
         printf("    sqoabench 10 images/textures/\n");
@@ -653,6 +657,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--noencode") == 0) { opt_noencode = 1; }
         else if (strcmp(argv[i], "--nodecode") == 0) { opt_nodecode = 1; }
         else if (strcmp(argv[i], "--norecurse") == 0) { opt_norecurse = 1; }
+        else if (strcmp(argv[i], "--noaverage") == 0) { opt_noaverage = 1; }
         else if (strcmp(argv[i], "--onlytotals") == 0) { opt_onlytotals = 1; }
         else { ERROR("Unknown option %s", argv[i]); }
     }
