@@ -456,7 +456,6 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
         }
         else {
             if (run > 0) {
-                /*
                 for (int shift = 6; shift < 32 && (run >> shift) != 0; shift++) {
                     if (run & (1<<shift)) {
                         bytes[p++] = SQOA_OP_BIGRUN(index_pos);
@@ -472,22 +471,6 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                     bytes[p++] = SQOA_OP_RUN | (run - 1);
                 }
                 run = 0;
-                */
-                for (int shift = 6; shift < 32 && (run >> shift) > 0; shift++) {
-                    if (run & (1<<shift)) {
-                        bytes[p++] = SQOA_OP_BIGRUN(index_pos);
-                        bytes[p++] = shift - 5;
-                    }
-                }
-                run = run % 64;
-                if (run > 0) {
-                    if (run == 63) {
-                        bytes[p++] = SQOA_OP_RUN;
-                        run--;
-                    }
-                    bytes[p++] = SQOA_OP_RUN | (run - 1);
-                    run = 0;
-                }
             }
 
             index_pos = SQOA_COLOR_HASH(px) % 64;
