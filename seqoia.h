@@ -10,10 +10,11 @@ QOI - The "Quite OK Image" format for fast, lossless image compression
 
 -- About
 
-QOI encodes and decodes images in a lossless format. Compared to stb_image and
-stb_image_write QOI offers 20x-50x faster encoding, 3x-4x faster decoding and
+SQOA encodes and decodes images in a lossless format. Compared to stb_image and
+stb_image_write SQOA offers 20x-50x faster encoding, 3x-4x faster decoding and
 20% better compression.
-
+Compared to QOI, SQOA files are about 0.7% smaller on the sample set with no 
+noticeable performance penalty.
 
 -- Synopsis
 
@@ -34,7 +35,7 @@ sqoa_write("image_new.sqoa", rgba_pixels, &(sqoa_desc){
 
 // Load and decode a SQOA image from the file system into a 32bbp RGBA buffer.
 // The sqoa_desc struct will be filled with the width, height, number of channels
-// and colorspace read from the file header.
+// and colorspace read from the file header. Compatible with QOI images.
 sqoa_desc desc;
 void *rgba_pixels = sqoa_read("image.sqoa", &desc, 4);
 
@@ -524,7 +525,6 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                     }
                     
                     if (px.rgba.a != px_prev.rgba.a) {
-                        //printf("alpha op at %x previous op=%x %x\n", p, bytes[p-2], bytes[p-1]);
                         bytes[p++] = SQOA_OP_ALPHA;
                         bytes[p++] = px.rgba.a;
                     }
@@ -630,9 +630,6 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 }
             }
             else if ((b1 & SQOA_MASK_2) == SQOA_OP_DIFF) {
-                if (b1 == SQOA_OP_ALPHA) {
-                    fprintf(stderr, "unexpected alpha op at %x\n", p);
-                }
                 px.rgba.r += ((b1 >> 4) & 0x03) - 2;
                 px.rgba.g += ((b1 >> 2) & 0x03) - 2;
                 px.rgba.b += ( b1       & 0x03) - 2;
