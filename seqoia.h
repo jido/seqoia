@@ -26,10 +26,10 @@ stb_image_write QOI offers 20x-50x faster encoding, 3x-4x faster decoding and
 // Encode and store an RGBA buffer to the file system. The sqoa_desc describes
 // the input pixel data.
 sqoa_write("image_new.sqoa", rgba_pixels, &(sqoa_desc){
-	.width = 1920,
-	.height = 1080,
-	.channels = 4,
-	.colorspace = SQOA_SRGB
+    .width = 1920,
+    .height = 1080,
+    .channels = 4,
+    .colorspace = SQOA_SRGB
 });
 
 // Load and decode a SQOA image from the file system into a 32bbp RGBA buffer.
@@ -66,11 +66,11 @@ A SQOA file has a 14 byte header, followed by any number of data "chunks" and an
 8-byte end marker.
 
 struct sqoa_header_t {
-	char     magic[4];   // magic bytes "Sqoa"
-	uint32_t width;      // image width in pixels (BE)
-	uint32_t height;     // image height in pixels (BE)
-	uint8_t  channels;   // 3 = RGB, 4 = RGBA
-	uint8_t  colorspace; // 0 = sRGB with linear alpha, 1 = all channels linear
+    char     magic[4];   // magic bytes "Sqoa"
+    uint32_t width;      // image width in pixels (BE)
+    uint32_t height;     // image height in pixels (BE)
+    uint8_t  channels;   // 3 = RGB, 4 = RGBA
+    uint8_t  colorspace; // 0 = sRGB with linear alpha, 1 = all channels linear
 };
 
 Images are encoded row by row, left to right, top to bottom. The decoder and
@@ -93,7 +93,7 @@ the color value. In the encoder, if the pixel value at the index matches the
 current pixel, this index position is written to the stream as SQOA_OP_INDEX.
 The hash function for the index is:
 
-	index_position = (r * 3 + g * 5 + b * 7 + a * 11) % 64
+    index_position = (r * 3 + g * 5 + b * 7 + a * 11) % 64
 
 Each chunk starts with a 2- or 8-bit tag, followed by a number of data bits. The
 bit length of chunks is divisible by 8 - i.e. all chunks are byte aligned. All
@@ -184,8 +184,8 @@ The alpha value must be updated separately else it remains unchanged.
 The green channel is used to indicate the general direction of change and is
 encoded in 6 bits. The red and blue channels (dr and db) base their diffs off
 of the green channel difference and are encoded in 4 bits. I.e.:
-	dr_dg = (cur_px.r - prev_px.r) - (cur_px.g - prev_px.g)
-	db_dg = (cur_px.b - prev_px.b) - (cur_px.g - prev_px.g)
+    dr_dg = (cur_px.r - prev_px.r) - (cur_px.g - prev_px.g)
+    db_dg = (cur_px.b - prev_px.b) - (cur_px.g - prev_px.g)
 
 The difference to the current channel values are using a wraparound operation,
 so "10 - 13" will result in 253, while "250 + 7" will result in 1.
@@ -257,8 +257,8 @@ filled with the description read from the file header (for sqoa_read and
 sqoa_decode).
 
 The colorspace in this sqoa_desc is an enum where
-	0 = sRGB, i.e. gamma scaled RGB channels and a linear alpha channel
-	1 = all channels are linear
+    0 = sRGB, i.e. gamma scaled RGB channels and a linear alpha channel
+    1 = all channels are linear
 You may use the constants SQOA_SRGB or SQOA_LINEAR. The colorspace is purely
 informative. It will be saved to the file header, but does not affect
 how chunks are en-/decoded. */
@@ -267,10 +267,10 @@ how chunks are en-/decoded. */
 #define SQOA_LINEAR 1
 
 typedef struct {
-	unsigned int width;
-	unsigned int height;
-	unsigned char channels;
-	unsigned char colorspace;
+    unsigned int width;
+    unsigned int height;
+    unsigned char channels;
+    unsigned char colorspace;
 } sqoa_desc;
 
 #ifndef SQOA_NO_STDIO
@@ -336,11 +336,11 @@ Implementation */
 #include <string.h>
 
 #ifndef SQOA_MALLOC
-	#define SQOA_MALLOC(sz) malloc(sz)
-	#define SQOA_FREE(p)    free(p)
+    #define SQOA_MALLOC(sz) malloc(sz)
+    #define SQOA_FREE(p)    free(p)
 #endif
 #ifndef SQOA_ZEROARR
-	#define SQOA_ZEROARR(a) memset((a),0,sizeof(a))
+    #define SQOA_ZEROARR(a) memset((a),0,sizeof(a))
 #endif
 
 #define SQOA_OP_INDEX  0x00 /* 00xxxxxx */
@@ -356,11 +356,11 @@ Implementation */
 #define SQOA_OP_BIGRUN(I) (SQOA_OP_INDEX | I)
 #define SQOA_COLOR_HASH(C) (C.rgba.r*3 + C.rgba.g*5 + C.rgba.b*7 + C.rgba.a*11)
 #define SQOA_MAGIC \
-	(((unsigned int)'S') << 24 | ((unsigned int)'q') << 16 | \
-	 ((unsigned int)'o') <<  8 | ((unsigned int)'a'))
+    (((unsigned int)'S') << 24 | ((unsigned int)'q') << 16 | \
+     ((unsigned int)'o') <<  8 | ((unsigned int)'a'))
 #define QOI_MAGIC \
-	(((unsigned int)'q') << 24 | ((unsigned int)'o') << 16 | \
-	 ((unsigned int)'i') <<  8 | ((unsigned int)'f'))
+    (((unsigned int)'q') << 24 | ((unsigned int)'o') << 16 | \
+     ((unsigned int)'i') <<  8 | ((unsigned int)'f'))
 #define SQOA_HEADER_SIZE 14
 
 /* 2GB is the max file size that this implementation can safely handle. We guard
@@ -370,92 +370,92 @@ enough for anybody. */
 #define SQOA_PIXELS_MAX ((unsigned int)400000000)
 
 typedef union {
-	struct { unsigned char r, g, b, a; } rgba;
-	unsigned int v;
+    struct { unsigned char r, g, b, a; } rgba;
+    unsigned int v;
 } sqoa_rgba_t;
 
 static const unsigned char sqoa_padding[8] = {0,0,0,0,0,0,0,1};
 
 static void sqoa_write_32(unsigned char *bytes, int *p, unsigned int v) {
-	bytes[(*p)++] = (0xff000000 & v) >> 24;
-	bytes[(*p)++] = (0x00ff0000 & v) >> 16;
-	bytes[(*p)++] = (0x0000ff00 & v) >> 8;
-	bytes[(*p)++] = (0x000000ff & v);
+    bytes[(*p)++] = (0xff000000 & v) >> 24;
+    bytes[(*p)++] = (0x00ff0000 & v) >> 16;
+    bytes[(*p)++] = (0x0000ff00 & v) >> 8;
+    bytes[(*p)++] = (0x000000ff & v);
 }
 
 static unsigned int sqoa_read_32(const unsigned char *bytes, int *p) {
-	unsigned int a = bytes[(*p)++];
-	unsigned int b = bytes[(*p)++];
-	unsigned int c = bytes[(*p)++];
-	unsigned int d = bytes[(*p)++];
-	return a << 24 | b << 16 | c << 8 | d;
+    unsigned int a = bytes[(*p)++];
+    unsigned int b = bytes[(*p)++];
+    unsigned int c = bytes[(*p)++];
+    unsigned int d = bytes[(*p)++];
+    return a << 24 | b << 16 | c << 8 | d;
 }
 
 void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
-	int i, max_size, p, run;
-	int px_len, px_end, px_pos, channels, index_pos;
-	unsigned char *bytes;
-	const unsigned char *pixels;
-	sqoa_rgba_t index[64];
-	sqoa_rgba_t px, px_prev;
+    int i, max_size, p, run;
+    int px_len, px_end, px_pos, channels, index_pos;
+    unsigned char *bytes;
+    const unsigned char *pixels;
+    sqoa_rgba_t index[64];
+    sqoa_rgba_t px, px_prev;
 
-	if (
-		data == NULL || out_len == NULL || desc == NULL ||
-		desc->width == 0 || desc->height == 0 ||
-		desc->channels < 3 || desc->channels > 4 ||
-		desc->colorspace > 1 ||
-		desc->height >= SQOA_PIXELS_MAX / desc->width
-	) {
-		return NULL;
-	}
+    if (
+        data == NULL || out_len == NULL || desc == NULL ||
+        desc->width == 0 || desc->height == 0 ||
+        desc->channels < 3 || desc->channels > 4 ||
+        desc->colorspace > 1 ||
+        desc->height >= SQOA_PIXELS_MAX / desc->width
+    ) {
+        return NULL;
+    }
 
-	max_size =
-		desc->width * desc->height * (desc->channels + 1) +
-		SQOA_HEADER_SIZE + sizeof(sqoa_padding);
+    max_size =
+        desc->width * desc->height * (desc->channels + 1) +
+        SQOA_HEADER_SIZE + sizeof(sqoa_padding);
 
-	p = 0;
-	bytes = (unsigned char *) SQOA_MALLOC(max_size);
-	if (!bytes) {
-		return NULL;
-	}
+    p = 0;
+    bytes = (unsigned char *) SQOA_MALLOC(max_size);
+    if (!bytes) {
+        return NULL;
+    }
 
-	sqoa_write_32(bytes, &p, SQOA_MAGIC);
-	sqoa_write_32(bytes, &p, desc->width);
-	sqoa_write_32(bytes, &p, desc->height);
-	bytes[p++] = desc->channels;
-	bytes[p++] = desc->colorspace;
+    sqoa_write_32(bytes, &p, SQOA_MAGIC);
+    sqoa_write_32(bytes, &p, desc->width);
+    sqoa_write_32(bytes, &p, desc->height);
+    bytes[p++] = desc->channels;
+    bytes[p++] = desc->colorspace;
 
 
-	pixels = (const unsigned char *)data;
+    pixels = (const unsigned char *)data;
 
-	SQOA_ZEROARR(index);
+    SQOA_ZEROARR(index);
 
-	run = 0;
-	px_prev.rgba.r = 0;
-	px_prev.rgba.g = 0;
-	px_prev.rgba.b = 0;
-	px_prev.rgba.a = 255;
+    run = 0;
+    px_prev.rgba.r = 0;
+    px_prev.rgba.g = 0;
+    px_prev.rgba.b = 0;
+    px_prev.rgba.a = 255;
     px.rgba.a = 255;
     index_pos = SQOA_COLOR_HASH(px_prev) % 64;
 
-	px_len = desc->width * desc->height * desc->channels;
-	px_end = px_len - desc->channels;
-	channels = desc->channels;
+    px_len = desc->width * desc->height * desc->channels;
+    px_end = px_len - desc->channels;
+    channels = desc->channels;
 
-	for (px_pos = 0; px_pos < px_len; px_pos += channels) {
-		px.rgba.r = pixels[px_pos + 0];
-		px.rgba.g = pixels[px_pos + 1];
-		px.rgba.b = pixels[px_pos + 2];
+    for (px_pos = 0; px_pos < px_len; px_pos += channels) {
+        px.rgba.r = pixels[px_pos + 0];
+        px.rgba.g = pixels[px_pos + 1];
+        px.rgba.b = pixels[px_pos + 2];
 
-		if (channels == 4) {
-			px.rgba.a = pixels[px_pos + 3];
-		}
+        if (channels == 4) {
+            px.rgba.a = pixels[px_pos + 3];
+        }
 
-		if (px.v == px_prev.v) {
-			run++;
-		}
-		else {
-			if (run > 0) {
+        if (px.v == px_prev.v) {
+            run++;
+        }
+        else {
+            if (run > 0) {
                 for (int shift = 6; shift < 32 && (run >> shift) > 0; shift++) {
                     if (run & (1<<shift)) {
                         bytes[p++] = SQOA_OP_BIGRUN(index_pos);
@@ -468,67 +468,67 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                         bytes[p++] = SQOA_OP_RUN;
                         run--;
                     }
-    				bytes[p++] = SQOA_OP_RUN | (run - 1);
-    				run = 0;
+                    bytes[p++] = SQOA_OP_RUN | (run - 1);
+                    run = 0;
                 }
-			}
+            }
 
-			index_pos = SQOA_COLOR_HASH(px) % 64;
+            index_pos = SQOA_COLOR_HASH(px) % 64;
 
-			if (index[index_pos].v == px.v) {
-				bytes[p++] = SQOA_OP_INDEX | index_pos;
-			}
-			else {
-				signed char vr = px.rgba.r - px_prev.rgba.r;
-				signed char vg = px.rgba.g - px_prev.rgba.g;
-				signed char vb = px.rgba.b - px_prev.rgba.b;
+            if (index[index_pos].v == px.v) {
+                bytes[p++] = SQOA_OP_INDEX | index_pos;
+            }
+            else {
+                signed char vr = px.rgba.r - px_prev.rgba.r;
+                signed char vg = px.rgba.g - px_prev.rgba.g;
+                signed char vb = px.rgba.b - px_prev.rgba.b;
 
-				signed char vg_r = vr - vg;
-				signed char vg_b = vb - vg;
+                signed char vg_r = vr - vg;
+                signed char vg_b = vb - vg;
 
-				index[index_pos] = px;
+                index[index_pos] = px;
 
-				if (
-					vg_r <  -8 || vg_r >  7 ||
-					vg   < -32 || vg   > 31 ||
-					vg_b <  -8 || vg_b >  7
+                if (
+                    vg_r <  -8 || vg_r >  7 ||
+                    vg   < -32 || vg   > 31 ||
+                    vg_b <  -8 || vg_b >  7
                 ) {
-    			    if (px.rgba.a == px_prev.rgba.a) {
-    					bytes[p++] = SQOA_OP_RGB;
-    					bytes[p++] = px.rgba.r;
-    					bytes[p++] = px.rgba.g;
-    					bytes[p++] = px.rgba.b;
-    				}
-    				else {
-    					bytes[p++] = SQOA_OP_RGBA;
-    					bytes[p++] = px.rgba.r;
-    					bytes[p++] = px.rgba.g;
-    					bytes[p++] = px.rgba.b;
-    					bytes[p++] = px.rgba.a;
-    				}
+                    if (px.rgba.a == px_prev.rgba.a) {
+                        bytes[p++] = SQOA_OP_RGB;
+                        bytes[p++] = px.rgba.r;
+                        bytes[p++] = px.rgba.g;
+                        bytes[p++] = px.rgba.b;
+                    }
+                    else {
+                        bytes[p++] = SQOA_OP_RGBA;
+                        bytes[p++] = px.rgba.r;
+                        bytes[p++] = px.rgba.g;
+                        bytes[p++] = px.rgba.b;
+                        bytes[p++] = px.rgba.a;
+                    }
                 }
                 else {
-    				if (px.rgba.a != px_prev.rgba.a) {
-    				    bytes[p++] = SQOA_OP_ALPHA;
+                    if (px.rgba.a != px_prev.rgba.a) {
+                        bytes[p++] = SQOA_OP_ALPHA;
                         bytes[p++] = px.rgba.a;
-    				}
+                    }
                     
-					if (
-						vr > -3 && vr < 2 &&
-						vg > -3 && vg < 2 &&
-						vb > -3 && vb < 2
-					) {
-						bytes[p++] = SQOA_OP_DIFF | (vr + 2) << 4 | (vg + 2) << 2 | (vb + 2);
-					}
-					else {
-						bytes[p++] = SQOA_OP_LUMA     | (vg   + 32);
-						bytes[p++] = (vg_r + 8) << 4 | (vg_b +  8);
-					}
+                    if (
+                        vr > -3 && vr < 2 &&
+                        vg > -3 && vg < 2 &&
+                        vb > -3 && vb < 2
+                    ) {
+                        bytes[p++] = SQOA_OP_DIFF | (vr + 2) << 4 | (vg + 2) << 2 | (vb + 2);
+                    }
+                    else {
+                        bytes[p++] = SQOA_OP_LUMA     | (vg   + 32);
+                        bytes[p++] = (vg_r + 8) << 4 | (vg_b +  8);
+                    }
                 }
-			}
-		}
-		px_prev = px;
-	}
+            }
+        }
+        px_prev = px;
+    }
     
     if (run > 63) {
         bytes[p++] = SQOA_OP_BIGRUN(index_pos);
@@ -538,184 +538,184 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
         bytes[p++] = SQOA_OP_RUN | (run - 1);
     }
 
-	for (i = 0; i < (int)sizeof(sqoa_padding); i++) {
-		bytes[p++] = sqoa_padding[i];
-	}
+    for (i = 0; i < (int)sizeof(sqoa_padding); i++) {
+        bytes[p++] = sqoa_padding[i];
+    }
 
-	*out_len = p;
-	return bytes;
+    *out_len = p;
+    return bytes;
 }
 
 void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
-	const unsigned char *bytes;
-	unsigned int header_magic;
-	unsigned char *pixels;
-	sqoa_rgba_t index[64];
-	sqoa_rgba_t px;
-	int px_len, chunks_len, px_pos, index_pos;
-	int p = 0, run = 0;
+    const unsigned char *bytes;
+    unsigned int header_magic;
+    unsigned char *pixels;
+    sqoa_rgba_t index[64];
+    sqoa_rgba_t px;
+    int px_len, chunks_len, px_pos, index_pos;
+    int p = 0, run = 0;
 
-	if (
-		data == NULL || desc == NULL ||
-		(channels != 0 && channels != 3 && channels != 4) ||
-		size < SQOA_HEADER_SIZE + (int)sizeof(sqoa_padding)
-	) {
-		return NULL;
-	}
+    if (
+        data == NULL || desc == NULL ||
+        (channels != 0 && channels != 3 && channels != 4) ||
+        size < SQOA_HEADER_SIZE + (int)sizeof(sqoa_padding)
+    ) {
+        return NULL;
+    }
 
-	bytes = (const unsigned char *)data;
+    bytes = (const unsigned char *)data;
 
-	header_magic = sqoa_read_32(bytes, &p);
-	desc->width = sqoa_read_32(bytes, &p);
-	desc->height = sqoa_read_32(bytes, &p);
-	desc->channels = bytes[p++];
-	desc->colorspace = bytes[p++];
+    header_magic = sqoa_read_32(bytes, &p);
+    desc->width = sqoa_read_32(bytes, &p);
+    desc->height = sqoa_read_32(bytes, &p);
+    desc->channels = bytes[p++];
+    desc->colorspace = bytes[p++];
 
-	if (
-		desc->width == 0 || desc->height == 0 ||
-		desc->channels < 3 || desc->channels > 4 ||
-		desc->colorspace > 1 ||
-		!(header_magic == QOI_MAGIC || header_magic == SQOA_MAGIC) ||
-		desc->height >= SQOA_PIXELS_MAX / desc->width
-	) {
-		return NULL;
-	}
+    if (
+        desc->width == 0 || desc->height == 0 ||
+        desc->channels < 3 || desc->channels > 4 ||
+        desc->colorspace > 1 ||
+        !(header_magic == QOI_MAGIC || header_magic == SQOA_MAGIC) ||
+        desc->height >= SQOA_PIXELS_MAX / desc->width
+    ) {
+        return NULL;
+    }
 
-	if (channels == 0) {
-		channels = desc->channels;
-	}
+    if (channels == 0) {
+        channels = desc->channels;
+    }
 
-	px_len = desc->width * desc->height * channels;
-	pixels = (unsigned char *) SQOA_MALLOC(px_len);
-	if (!pixels) {
-		return NULL;
-	}
+    px_len = desc->width * desc->height * channels;
+    pixels = (unsigned char *) SQOA_MALLOC(px_len);
+    if (!pixels) {
+        return NULL;
+    }
 
-	SQOA_ZEROARR(index);
-	px.rgba.r = 0;
-	px.rgba.g = 0;
-	px.rgba.b = 0;
-	px.rgba.a = 255;
+    SQOA_ZEROARR(index);
+    px.rgba.r = 0;
+    px.rgba.g = 0;
+    px.rgba.b = 0;
+    px.rgba.a = 255;
     index_pos = SQOA_COLOR_HASH(px) % 64;
 
-	chunks_len = size - (int)sizeof(sqoa_padding);
-	for (px_pos = 0; px_pos < px_len; px_pos += channels) {
-		if (run > 0) {
-			run--;
-		}
-		else if (p < chunks_len) {
-			int b1 = bytes[p++];
+    chunks_len = size - (int)sizeof(sqoa_padding);
+    for (px_pos = 0; px_pos < px_len; px_pos += channels) {
+        if (run > 0) {
+            run--;
+        }
+        else if (p < chunks_len) {
+            int b1 = bytes[p++];
 
             if (b1 == SQOA_OP_ALPHA) {
                 px.rgba.a = bytes[p++];
                 b1 = bytes[p++];
             }
             
-			if (b1 == SQOA_OP_RGB) {
-				px.rgba.r = bytes[p++];
-				px.rgba.g = bytes[p++];
-				px.rgba.b = bytes[p++];
-			}
-			else if (b1 == SQOA_OP_RGBA) {
-				px.rgba.r = bytes[p++];
-				px.rgba.g = bytes[p++];
-				px.rgba.b = bytes[p++];
-				px.rgba.a = bytes[p++];
-			}
-			else if ((b1 & SQOA_MASK_2) == SQOA_OP_INDEX) {
+            if (b1 == SQOA_OP_RGB) {
+                px.rgba.r = bytes[p++];
+                px.rgba.g = bytes[p++];
+                px.rgba.b = bytes[p++];
+            }
+            else if (b1 == SQOA_OP_RGBA) {
+                px.rgba.r = bytes[p++];
+                px.rgba.g = bytes[p++];
+                px.rgba.b = bytes[p++];
+                px.rgba.a = bytes[p++];
+            }
+            else if ((b1 & SQOA_MASK_2) == SQOA_OP_INDEX) {
                 if (b1 == index_pos) {
                     run = (32 << bytes[p++]) - 1;
                 }
                 else {
                     px = index[b1];
                 }
-			}
-			else if ((b1 & SQOA_MASK_2) == SQOA_OP_DIFF) {
-				px.rgba.r += ((b1 >> 4) & 0x03) - 2;
-				px.rgba.g += ((b1 >> 2) & 0x03) - 2;
-				px.rgba.b += ( b1       & 0x03) - 2;
-			}
-			else if ((b1 & SQOA_MASK_2) == SQOA_OP_LUMA) {
-				int b2 = bytes[p++];
-				int vg = (b1 & 0x3f) - 32;
-				px.rgba.r += vg - 8 + ((b2 >> 4) & 0x0f);
-				px.rgba.g += vg;
-				px.rgba.b += vg - 8 +  (b2       & 0x0f);
-			}
-			else if ((b1 & SQOA_MASK_2) == SQOA_OP_RUN) {
-				run = (b1 & 0x3f);
-			}
+            }
+            else if ((b1 & SQOA_MASK_2) == SQOA_OP_DIFF) {
+                px.rgba.r += ((b1 >> 4) & 0x03) - 2;
+                px.rgba.g += ((b1 >> 2) & 0x03) - 2;
+                px.rgba.b += ( b1       & 0x03) - 2;
+            }
+            else if ((b1 & SQOA_MASK_2) == SQOA_OP_LUMA) {
+                int b2 = bytes[p++];
+                int vg = (b1 & 0x3f) - 32;
+                px.rgba.r += vg - 8 + ((b2 >> 4) & 0x0f);
+                px.rgba.g += vg;
+                px.rgba.b += vg - 8 +  (b2       & 0x0f);
+            }
+            else if ((b1 & SQOA_MASK_2) == SQOA_OP_RUN) {
+                run = (b1 & 0x3f);
+            }
 
-			index_pos = SQOA_COLOR_HASH(px) % 64;
+            index_pos = SQOA_COLOR_HASH(px) % 64;
             index[index_pos] = px;
-		}
+        }
 
-		pixels[px_pos + 0] = px.rgba.r;
-		pixels[px_pos + 1] = px.rgba.g;
-		pixels[px_pos + 2] = px.rgba.b;
-		
-		if (channels == 4) {
-			pixels[px_pos + 3] = px.rgba.a;
-		}
-	}
+        pixels[px_pos + 0] = px.rgba.r;
+        pixels[px_pos + 1] = px.rgba.g;
+        pixels[px_pos + 2] = px.rgba.b;
+        
+        if (channels == 4) {
+            pixels[px_pos + 3] = px.rgba.a;
+        }
+    }
 
-	return pixels;
+    return pixels;
 }
 
 #ifndef SQOA_NO_STDIO
 #include <stdio.h>
 
 int sqoa_write(const char *filename, const void *data, const sqoa_desc *desc) {
-	FILE *f = fopen(filename, "wb");
-	int size;
-	void *encoded;
+    FILE *f = fopen(filename, "wb");
+    int size;
+    void *encoded;
 
-	if (!f) {
-		return 0;
-	}
+    if (!f) {
+        return 0;
+    }
 
-	encoded = sqoa_encode(data, desc, &size);
-	if (!encoded) {
-		fclose(f);
-		return 0;
-	}
+    encoded = sqoa_encode(data, desc, &size);
+    if (!encoded) {
+        fclose(f);
+        return 0;
+    }
 
-	fwrite(encoded, 1, size, f);
-	fclose(f);
+    fwrite(encoded, 1, size, f);
+    fclose(f);
 
-	SQOA_FREE(encoded);
-	return size;
+    SQOA_FREE(encoded);
+    return size;
 }
 
 void *sqoa_read(const char *filename, sqoa_desc *desc, int channels) {
-	FILE *f = fopen(filename, "rb");
-	int size, bytes_read;
-	void *pixels, *data;
+    FILE *f = fopen(filename, "rb");
+    int size, bytes_read;
+    void *pixels, *data;
 
-	if (!f) {
-		return NULL;
-	}
+    if (!f) {
+        return NULL;
+    }
 
-	fseek(f, 0, SEEK_END);
-	size = ftell(f);
-	if (size <= 0) {
-		fclose(f);
-		return NULL;
-	}
-	fseek(f, 0, SEEK_SET);
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    if (size <= 0) {
+        fclose(f);
+        return NULL;
+    }
+    fseek(f, 0, SEEK_SET);
 
-	data = SQOA_MALLOC(size);
-	if (!data) {
-		fclose(f);
-		return NULL;
-	}
+    data = SQOA_MALLOC(size);
+    if (!data) {
+        fclose(f);
+        return NULL;
+    }
 
-	bytes_read = fread(data, 1, size, f);
-	fclose(f);
+    bytes_read = fread(data, 1, size, f);
+    fclose(f);
 
-	pixels = sqoa_decode(data, bytes_read, desc, channels);
-	SQOA_FREE(data);
-	return pixels;
+    pixels = sqoa_decode(data, bytes_read, desc, channels);
+    SQOA_FREE(data);
+    return pixels;
 }
 
 #endif /* SQOA_NO_STDIO */
