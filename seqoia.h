@@ -435,6 +435,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 	px_prev.rgba.g = 0;
 	px_prev.rgba.b = 0;
 	px_prev.rgba.a = 255;
+    px.rgba.a = 255;
     index_pos = SQOA_COLOR_HASH(px_prev) % 64;
 
 	px_len = desc->width * desc->height * desc->channels;
