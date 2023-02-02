@@ -378,8 +378,9 @@ Implementation */
 
 #define SQOA_MASK_2    0xc0 /* 11000000 */
 
-#define SQOA_MAXRUN 1024
-#define SQOA_COLOR_HASH(C) (C.rgba.r*3 + C.rgba.g*5 + C.rgba.b*7 + C.rgba.a*11)
+#define SQOA_MAXRUN 512
+#define SQOA_RGBA_HASH(R, G, B, A) (R*3 + G*5 + B*7 + A*11)
+#define SQOA_COLOR_HASH(C) SQOA_RGBA_HASH(C.rgba.r, C.rgba.g, C.rgba.b, C.rgba.a)
 #define SQOA_MAGIC \
     (((unsigned int)'S') << 24 | ((unsigned int)'q') << 16 | \
      ((unsigned int)'o') <<  8 | ((unsigned int)'a'))
@@ -419,11 +420,12 @@ static unsigned int sqoa_read_32(const unsigned char *bytes, int *p) {
 
 void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
     int i, max_size, p, run;
-    int px_len, px_end, px_pos, channels, index_pos;
+    int px_len, px_end, px_pos, channels, index_pos, index_a;
     unsigned char *bytes;
     const unsigned char *pixels;
     sqoa_rgba_t index[64];
-    sqoa_rgba_t px, px_prev;
+    unsigned char alpha[64] = {0xff};
+    sqoa_rgba_t px, px_prev, px_alpha;
 
     if (
         data == NULL || out_len == NULL || desc == NULL ||
@@ -495,9 +497,22 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             }
 
             index_pos = SQOA_COLOR_HASH(px) % 64;
+            if (channels == 4) {
+                index_a = SQOA_RGBA_HASH(px.rgba.r, px.rgba.g, px.rgba.b, 0xff) % 64;
+                px_alpha = px;
+                px_alpha.rgba.a = alpha[index_a];
+                alpha[index_a] = px.rgba.a;
+                index_a = SQOA_COLOR_HASH(px_alpha) % 64;
+            }
 
             if (index[index_pos].v == px.v) {
                 bytes[p++] = SQOA_OP_INDEX | index_pos;
+            }
+            else if (channels == 4 && index[index_a].v == px_alpha.v) {
+                index[index_pos] = px;
+                bytes[p++] = SQOA_OP_INDEX | index_a;
+                bytes[p++] = SQOA_OP_ALPHA;
+                bytes[p++] = px.rgba.a;
             }
             else {
                 signed char vr = px.rgba.r - px_prev.rgba.r;
