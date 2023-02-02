@@ -648,7 +648,10 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
             else if ((b1 & SQOA_MASK_2) == SQOA_OP_INDEX) {
                 px = index[b1];
             }
-            else if (b1 != SQOA_OP_ALPHA && (b1 & SQOA_MASK_2) == SQOA_OP_DIFF) {
+            else if (
+                (qoi_compat || b1 != SQOA_OP_ALPHA) &&
+                (b1 & SQOA_MASK_2) == SQOA_OP_DIFF
+            ) {
                 px.rgba.r += ((b1 >> 4) & 0x03) - 2;
                 px.rgba.g += ((b1 >> 2) & 0x03) - 2;
                 px.rgba.b += ( b1       & 0x03) - 2;
