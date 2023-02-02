@@ -73,12 +73,13 @@ int main(int argc, char **argv) {
 	if (STR_ENDS_WITH(argv[2], ".png")) {
 		encoded = stbi_write_png(argv[2], w, h, channels, pixels, 0);
 	}
-	else if (STR_ENDS_WITH(argv[2], ".sqoa")) {
+	else if (STR_ENDS_WITH(argv[2], ".sqoa") || STR_ENDS_WITH(argv[2], ".qoi")) {
 		encoded = sqoa_write(argv[2], pixels, &(sqoa_desc){
 			.width = w,
 			.height = h, 
 			.channels = channels,
-			.colorspace = SQOA_SRGB
+			.colorspace = SQOA_SRGB,
+            .qoi_compat = STR_ENDS_WITH(argv[2], ".qoi")
 		});
 	}
 

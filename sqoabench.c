@@ -435,7 +435,8 @@ benchmark_result_t benchmark_image(const char *path) {
             .width = w,
             .height = h, 
             .channels = channels,
-            .colorspace = SQOA_SRGB
+            .colorspace = SQOA_SRGB,
+            .qoi_compat = 0
         }, &encoded_sqoa_size);
 
     if (!pixels || !encoded_sqoa || !encoded_qoi || !encoded_png) {
@@ -529,7 +530,8 @@ benchmark_result_t benchmark_image(const char *path) {
                 .width = w,
                 .height = h, 
                 .channels = channels,
-                .colorspace = SQOA_SRGB
+                .colorspace = SQOA_SRGB,
+                .qoi_compat = 0
             }, &enc_size);
             res.sqoa.size = enc_size;
             free(enc_p);

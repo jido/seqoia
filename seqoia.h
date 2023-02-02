@@ -25,12 +25,13 @@ noticeable performance penalty.
 #include "sqoa.h"
 
 // Encode and store an RGBA buffer to the file system. The sqoa_desc describes
-// the input pixel data.
+// the input pixel data. Set qoi_compat to 1 to write a QOI image.
 sqoa_write("image_new.sqoa", rgba_pixels, &(sqoa_desc){
     .width = 1920,
     .height = 1080,
     .channels = 4,
-    .colorspace = SQOA_SRGB
+    .colorspace = SQOA_SRGB,
+    .qoi_compat = 0
 });
 
 // Load and decode a SQOA image from the file system into a 32bbp RGBA buffer.
@@ -72,6 +73,7 @@ struct sqoa_header_t {
     uint32_t height;     // image height in pixels (BE)
     uint8_t  channels;   // 3 = RGB, 4 = RGBA
     uint8_t  colorspace; // 0 = sRGB with linear alpha, 1 = all channels linear
+    uint8_t  qoi_compat; // 0 = no compatibility, 1 = compatible with QOI
 };
 
 The value of the start byte is 48 ('0'). If the start byte is missing, the
@@ -174,42 +176,37 @@ The alpha value must be updated separately else it remains unchanged.
 .- SQOA_OP_RUN -----------.
 |         Byte[0]         |
 |  7  6  5  4  3  2  1  0 |
-|----------+--------------|
-|  1  1  0 |     run      |
+|-------+-----------------|
+|  1  1 |       run       |
 `-------------------------`
-3-bit tag b110
-5-bit run-length repeating the previous pixel: 1..32
+2-bit tag b11
+6-bit run-length repeating the previous pixel: 1..61
 
 The run-length is stored with a bias of -1. 
+
+Note that the run-lengths 62, 63 and 64 (b111101 to b111111)
+are illegal since they are reserved for other operations.
 
 
 .- SQOA_OP_BIGRUN --------.
 |         Byte[0]         |
 |  7  6  5  4  3  2  1  0 |
-|----------+--------------|
-|  1  1  1 |     run      |
+|-------------------------|
+|  1  1  1  1  1  1  0  1 |
 `-------------------------`
-3-bit tag b111
-3-bit run-length repeating the previous pixel: 64, 128, ..., 2147483648
+8-bit tag b11111101
 
-The run-length is stored as a power of 2 with a bias of -2. For example 128
-is stored as "5" since it is 2 to the power of 7.
-
-Lengths smaller than 64 (b11100100) and larger than 2147483648 (b11111101) 
-are illegal since they are reserved for other operations.
+The run length is set to SQOA_MAXRUN (512).
 
 
-.- SQOA_OP_ALPHA ---------.
-|         Byte[0]         |
-|  7  6  5  4  3  2  1  0 |
-|-------------------+-----|
-|  1  1  1  0  0  0 | da  |
-`-------------------------`
-6-bit tag b111000
-2-bit alpha channel difference from previous pixel: -2...2
-
-The difference is stored with a bias of -2 for negative values, and a bias
-of -1 for positive values. The difference cannot be zero.
+.- SQOA_OP_ALPHA -------------------.
+|         Byte[0]         | Byte[1] |
+|  7  6  5  4  3  2  1  0 | 7 .. 0  |
+|-------------------------+---------|
+|  0  1  1  0  1  0  1  0 |  alpha  |
+`-----------------------------------`
+8-bit tag b01101010
+8-bit alpha channel value
 
 The alpha channel update applies to last pixel.
 
@@ -284,7 +281,9 @@ The colorspace in this sqoa_desc is an enum where
     1 = all channels are linear
 You may use the constants SQOA_SRGB or SQOA_LINEAR. The colorspace is purely
 informative. It will be saved to the file header, but does not affect
-how chunks are en-/decoded. */
+how chunks are en-/decoded.
+The qoi_compat field indicates if the image is in QOI format (for decode) or
+if QOI compatibility is requested (for encode). */
 
 #define SQOA_SRGB   0
 #define SQOA_LINEAR 1
@@ -294,6 +293,7 @@ typedef struct {
     unsigned int height;
     unsigned char channels;
     unsigned char colorspace;
+    unsigned char qoi_compat;
 } sqoa_desc;
 
 #ifndef SQOA_NO_STDIO
@@ -379,6 +379,7 @@ Implementation */
 #define SQOA_MASK_2    0xc0 /* 11000000 */
 
 #define SQOA_MAXRUN 512
+#define QOI_MAXRUN  62
 #define SQOA_RGBA_HASH(R, G, B, A) (R*3 + G*5 + B*7 + A*11)
 #define SQOA_COLOR_HASH(C) SQOA_RGBA_HASH(C.rgba.r, C.rgba.g, C.rgba.b, C.rgba.a)
 #define SQOA_MAGIC \
@@ -419,7 +420,7 @@ static unsigned int sqoa_read_32(const unsigned char *bytes, int *p) {
 }
 
 void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
-    int i, max_size, p, run;
+    int i, max_size, p, run, qoi_compat, max_run;
     int px_len, px_end, px_pos, channels, index_pos, index_a;
     unsigned char *bytes;
     const unsigned char *pixels;
@@ -441,19 +442,31 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
         desc->width * desc->height * (desc->channels + 1) +
         SQOA_HEADER_SIZE + sizeof(sqoa_padding);
 
+    qoi_compat = desc->qoi_compat;
     p = 0;
     bytes = (unsigned char *) SQOA_MALLOC(max_size);
     if (!bytes) {
         return NULL;
     }
 
-    sqoa_write_32(bytes, &p, SQOA_MAGIC);
+    if (qoi_compat) {
+        sqoa_write_32(bytes, &p, QOI_MAGIC);
+    }
+    else {
+        sqoa_write_32(bytes, &p, SQOA_MAGIC);
+    }
     sqoa_write_32(bytes, &p, desc->width);
     sqoa_write_32(bytes, &p, desc->height);
     bytes[p++] = desc->channels;
     bytes[p++] = desc->colorspace;
-    bytes[p++] = SQOA_START_BYTE;
-
+    
+    if (qoi_compat) {
+        max_run = QOI_MAXRUN;
+    }
+    else {
+        max_run = SQOA_MAXRUN;
+        bytes[p++] = SQOA_START_BYTE;
+    }
 
     pixels = (const unsigned char *)data;
 
@@ -479,15 +492,15 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             px.rgba.a = pixels[px_pos + 3];
         }
 
-        if (px.v == px_prev.v && run < SQOA_MAXRUN) {
+        if (px.v == px_prev.v) {
             run++;
-        }
-        else {
-            if (run == SQOA_MAXRUN) {
+            if (run == max_run) {
                 bytes[p++] = SQOA_OP_BIGRUN;
                 run = 0;
             }
-            else if (run > 0) {
+        }
+        else {
+            if (run > 0) {
                 while (run > 61) {
                     bytes[p++] = SQOA_OP_RUN | 60;
                     run = run - 61;
@@ -497,7 +510,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             }
 
             index_pos = SQOA_COLOR_HASH(px) % 64;
-            if (channels == 4) {
+            if (channels == 4 && !qoi_compat) {
                 index_a = SQOA_RGBA_HASH(px.rgba.r, px.rgba.g, px.rgba.b, 0xff) % 64;
                 px_alpha = px;
                 px_alpha.rgba.a = alpha[index_a];
@@ -508,7 +521,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             if (index[index_pos].v == px.v) {
                 bytes[p++] = SQOA_OP_INDEX | index_pos;
             }
-            else if (channels == 4 && index[index_a].v == px_alpha.v) {
+            else if (channels == 4 && !qoi_compat && index[index_a].v == px_alpha.v) {
                 index[index_pos] = px;
                 bytes[p++] = SQOA_OP_INDEX | index_a;
                 bytes[p++] = SQOA_OP_ALPHA;
@@ -527,9 +540,11 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
 
                 if (
                     va != 0 && (
-                    vg_r <  -8 || vg_r >  7 ||
-                    vg   < -32 || vg   > 31 ||
-                    vg_b <  -8 || vg_b >  7)
+                        qoi_compat ||
+                        vg_r <  -8 || vg_r >  7 ||
+                        vg   < -32 || vg   > 31 ||
+                        vg_b <  -8 || vg_b >  7
+                    )
                 ) {
                     bytes[p++] = SQOA_OP_RGBA;
                     bytes[p++] = px.rgba.r;
@@ -609,13 +624,14 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
     desc->height = sqoa_read_32(bytes, &p);
     desc->channels = bytes[p++];
     desc->colorspace = bytes[p++];
-    qoi_compat = (bytes[p] != SQOA_START_BYTE);
+    desc->qoi_compat = (bytes[p] != SQOA_START_BYTE);
 
     if (
         desc->width == 0 || desc->height == 0 ||
         desc->channels < 3 || desc->channels > 4 ||
         desc->colorspace > 1 ||
         !(header_magic == QOI_MAGIC || header_magic == SQOA_MAGIC) ||
+        (header_magic == QOI_MAGIC && !qoi_compat) ||
         desc->height >= SQOA_PIXELS_MAX / desc->width
     ) {
         return NULL;
@@ -631,6 +647,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
         return NULL;
     }
 
+    qoi_compat = desc->qoi_compat;
     if (!qoi_compat) {
         p++;
     }
