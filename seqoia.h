@@ -25,7 +25,7 @@ noticeable performance penalty.
 #include "sqoa.h"
 
 // Encode and store an RGBA buffer to the file system. The sqoa_desc describes
-// the input pixel data. Set qoi_compat to 1 to write a QOI image.
+// the input pixel data. Set qoi_compat to 1 to write to QOI instead of SQOA.
 sqoa_write("image_new.sqoa", rgba_pixels, &(sqoa_desc){
     .width = 1920,
     .height = 1080,
@@ -45,10 +45,10 @@ void *rgba_pixels = sqoa_read("image.sqoa", &desc, 4);
 -- Documentation
 
 This library provides the following functions;
-- sqoa_read    -- read and decode a SQOA file
-- sqoa_decode  -- decode the raw bytes of a SQOA image from memory
-- sqoa_write   -- encode and write a SQOA file
-- sqoa_encode  -- encode an rgba buffer into a SQOA image in memory
+- sqoa_read    -- read and decode a SQOA/QOI file
+- sqoa_decode  -- decode the raw bytes of a SQOA/QOI image from memory
+- sqoa_write   -- encode and write a SQOA/QOI file
+- sqoa_encode  -- encode an rgba buffer into a SQOA/QOI image in memory
 
 See the function declaration below for the signature and more information.
 
@@ -90,7 +90,8 @@ Pixels are encoded as
  - full r,g,b or r,g,b,a values
 
 The color channels are assumed to not be premultiplied with the alpha channel
-("un-premultiplied alpha").
+("un-premultiplied alpha"). The indexed and delta pixels can receive an update
+to the alpha channel.
 
 A running array[64] (zero-initialized) of previously seen pixel values is
 maintained by the encoder and decoder. Each pixel that is seen by the encoder
@@ -125,6 +126,8 @@ The possible chunks are:
 
 It is not valid to use SQOA_OP_INDEX to repeat the last pixel once. SQOA_OP_RUN 
 should be used instead.
+
+The alpha value must be updated separately else it remains unchanged.
 
 
 .- SQOA_OP_DIFF ----------.
@@ -173,6 +176,18 @@ and a bias of 8 for the red and blue channel.
 The alpha value must be updated separately else it remains unchanged.
 
 
+.- SQOA_OP_ALPHA -------------------.
+|         Byte[0]         | Byte[1] |
+|  7  6  5  4  3  2  1  0 | 7 .. 0  |
+|-------------------------+---------|
+|  0  1  1  0  1  0  1  0 |  alpha  |
+`-----------------------------------`
+8-bit tag b01101010
+8-bit alpha channel value
+
+The alpha channel update applies to last pixel.
+
+
 .- SQOA_OP_RUN -----------.
 |         Byte[0]         |
 |  7  6  5  4  3  2  1  0 |
@@ -197,18 +212,6 @@ are illegal since they are reserved for other operations.
 8-bit tag b11111101
 
 The run length is set to SQOA_MAXRUN (512).
-
-
-.- SQOA_OP_ALPHA -------------------.
-|         Byte[0]         | Byte[1] |
-|  7  6  5  4  3  2  1  0 | 7 .. 0  |
-|-------------------------+---------|
-|  0  1  1  0  1  0  1  0 |  alpha  |
-`-----------------------------------`
-8-bit tag b01101010
-8-bit alpha channel value
-
-The alpha channel update applies to last pixel.
 
 
 .- SQOA_OP_RGB -----------------------------------------.
@@ -300,7 +303,8 @@ typedef struct {
 
 /* Encode raw RGB or RGBA pixels into a SQOA image and write it to the file
 system. The sqoa_desc struct must be filled with the image width, height,
-number of channels (3 = RGB, 4 = RGBA) and the colorspace.
+number of channels (3 = RGB, 4 = RGBA) and the colorspace. If qoi_compat is
+non-zero, a QOI image is written instead.
 
 The function returns 0 on failure (invalid parameters, or fopen or malloc
 failed) or the number of bytes written on success. */
@@ -314,7 +318,8 @@ output format will be forced into this number of channels.
 
 The function either returns NULL on failure (invalid data, or malloc or fopen
 failed) or a pointer to the decoded pixels. On success, the sqoa_desc struct
-will be filled with the description from the file header.
+will be filled with the description from the file header. Can also read a QOI
+image which sets the qoi_compat value to 1 in sqoa_desc.
 
 The returned pixel data should be free()d after use. */
 
@@ -323,7 +328,7 @@ void *sqoa_read(const char *filename, sqoa_desc *desc, int channels);
 #endif /* SQOA_NO_STDIO */
 
 
-/* Encode raw RGB or RGBA pixels into a SQOA image in memory.
+/* Encode raw RGB or RGBA pixels into a SQOA or QOI image in memory.
 
 The function either returns NULL on failure (invalid parameters or malloc
 failed) or a pointer to the encoded data on success. On success the out_len
@@ -334,7 +339,7 @@ The returned sqoa data should be free()d after use. */
 void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len);
 
 
-/* Decode a SQOA image from memory.
+/* Decode a SQOA or QOI image from memory.
 
 The function either returns NULL on failure (invalid parameters or malloc
 failed) or a pointer to the decoded pixels. On success, the sqoa_desc struct

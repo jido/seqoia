@@ -2,8 +2,9 @@
 
 ## Why?
 
-Seqoia is a derivative of QOI. Its decoder is designed to be compatible with QOI,
-however the encoder is not compatible. SQOA images are about 0.7% smaller than QOI.
+Seqoia is a derivative of QOI. It can read and write QOI files in addition to
+SQOA files. SQOA images are about 0.7% smaller than QOI and they are amenable 
+to further reduction using a generic compression tool.
 
 Compared to stb_image and stb_image_write Seqoia offers 20x-50x faster encoding,
 3x-4x faster decoding and 20% better compression. It's also stupidly simple and
@@ -12,10 +13,10 @@ fits in about 400 lines of C.
 
 ## Example Usage
 
-- [sqoaconv.c](https://github.com/jido/seqoia/blob/sqoa/sqoaconv.c)
-converts between png <> sqoa
- - [sqoabench.c](https://github.com/jido/seqoia/blob/sqoa/sqoabench.c)
-a simple wrapper to benchmark stbi, libpng and sqoa
+- [sqoaconv.c](https://github.com/jido/seqoia/blob/sqoa-format/sqoaconv.c)
+converts between png <> sqoa <> qoi
+ - [sqoabench.c](https://github.com/jido/seqoia/blob/sqoa-format/sqoabench.c)
+a simple wrapper to benchmark stbi, libpng, qoi and sqoa
 
 
 ## MIME Type, File Extension
@@ -42,7 +43,7 @@ Benchmark command:
 
 **Results:**
 
-> [bench10.txt](https://github.com/jido/seqoia/blob/sqoa/bench10.txt)
+> [bench10.txt](https://github.com/jido/seqoia/blob/sqoa-format/bench10.txt)
 
 _Seqoia_ compresses better than _QOI_ on synthetic images like icons.
 
@@ -62,8 +63,6 @@ performance (but it's still very fast).
 
 ## Original Project
 
-![QOI Logo](https://qoiformat.org/qoi-logo.svg)
-
 ### QOI - The “Quite OK Image Format” for fast, lossless image compression
 
 Single-file MIT licensed library for C/C++
@@ -72,3 +71,5 @@ See [qoi.h](https://github.com/phoboslab/qoi/blob/master/qoi.h) for
 the documentation and format specification.
 
 More info at https://qoiformat.org
+
+![QOI Logo](https://qoiformat.org/qoi-logo.svg)
