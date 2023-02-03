@@ -47,6 +47,35 @@ Benchmark command:
 
 _Seqoia_ compresses better than _QOI_ on synthetic images like icons.
 
+Why you should compress your SQOA files:
+
+Total size of PNG files in "images" folder:
+
+```
+ 1144723797
+```
+
+Total size of SQOA files before compression:
+
+```
+ 1342694532
+```
+
+Command:
+
+```
+gzip -r sqoaimages
+```
+
+Total size of SQOA files after compression:
+
+```
+ 1060163477
+```
+
+The results are smaller than the original PNG folder, all while using a fraction of the power/time to generate them!
+
+For comparison, the total size of STBI-generated PNG files is 1637952729 (STBI is much slower).
 
 ## Limitations
 
