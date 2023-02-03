@@ -5,12 +5,13 @@ Copyright (c) 2021, Dominic Szablewski - https://phoboslab.org
 SPDX-License-Identifier: MIT
 
 
-Command line tool to convert between png <> sqoa format
+Command line tool to convert between png <> sqoa <> qoi > jpg format
 
 Requires:
 	-"stb_image.h" (https://github.com/nothings/stb/blob/master/stb_image.h)
 	-"stb_image_write.h" (https://github.com/nothings/stb/blob/master/stb_image_write.h)
-	-"seqoia.h" (https://github.com/jido/seqoia/blob/sqoa/seqoia.h)
+    -"tiny_jpeg.h" (https://github.com/serge-rgb/TinyJPEG/blob/master/tiny_jpeg.h)
+	-"seqoia.h" (https://github.com/jido/seqoia/blob/sqoa-format/seqoia.h)
 
 Compile with: 
 	gcc sqoaconv.c -std=c99 -O3 -o sqoaconv
@@ -26,9 +27,11 @@ Compile with:
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#define TJE_IMPLEMENTATION
+#include "tiny_jpeg.h"
+
 #define SQOA_IMPLEMENTATION
 #include "seqoia.h"
-
 
 #define STR_ENDS_WITH(S, E) (strcmp(S + strlen(S) - (sizeof(E)-1), E) == 0)
 
@@ -37,7 +40,8 @@ int main(int argc, char **argv) {
 		puts("Usage: sqoaconv <infile> <outfile>");
 		puts("Examples:");
 		puts("  sqoaconv input.png output.sqoa");
-		puts("  sqoaconv input.sqoa output.png");
+		puts("  sqoaconv input.qoi output.png");
+		puts("  sqoaconv input.sqoa output.jpg");
 		exit(1);
 	}
 
@@ -73,6 +77,9 @@ int main(int argc, char **argv) {
 	if (STR_ENDS_WITH(argv[2], ".png")) {
 		encoded = stbi_write_png(argv[2], w, h, channels, pixels, 0);
 	}
+    else if (STR_ENDS_WITH(argv[2], ".jpg")) {
+        encoded = tje_encode_to_file_at_quality(argv[2], 2, w, h, channels, pixels);
+    }
 	else if (STR_ENDS_WITH(argv[2], ".sqoa") || STR_ENDS_WITH(argv[2], ".qoi")) {
 		encoded = sqoa_write(argv[2], pixels, &(sqoa_desc){
 			.width = w,
