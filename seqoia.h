@@ -379,7 +379,7 @@ Implementation */
 #define SQOA_OP_BIGRUN 0xfd /* 11111101 */
 #define SQOA_OP_RGB    0xfe /* 11111110 */
 #define SQOA_OP_RGBA   0xff /* 11111111 */
-#define QOI_OP_RUN     0xc0 /* 11xxxxxx */
+//#define QOI_OP_RUN     0xc0 /* 11xxxxxx */
 
 #define SQOA_MASK_2    0xc0 /* 11000000 */
 
@@ -700,10 +700,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 px.rgba.g += vg;
                 px.rgba.b += vg - 8 +  (b2       & 0x0f);
             }
-            else if (qoi_compat && (b1 & SQOA_MASK_2) == QOI_OP_RUN) {
-                run = (b1 & 0x3f);
-            }
-            else if (b1 == SQOA_OP_BIGRUN) {
+            else if (!qoi_compat && b1 == SQOA_OP_BIGRUN) {
                 run = SQOA_MAXRUN - 1;
             }
             else if ((b1 & SQOA_MASK_2) == SQOA_OP_RUN) {
