@@ -47,9 +47,9 @@ Benchmark command:
 
 _Seqoia_ compresses better than _QOI_ on synthetic images like icons.
 
-Why you should compress your SQOA files:
+### Why you should compress your SQOA files
 
-Total size of PNG files in "images" folder:
+Total size of PNG files in the "images" folder:
 
 ```
  1144723797
