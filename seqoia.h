@@ -124,10 +124,11 @@ The possible chunks are:
 2-bit tag b00
 6-bit index into the color index array: 0..63
 
-It is not valid to use SQOA_OP_INDEX to repeat the last pixel once. SQOA_OP_RUN 
-should be used instead.
-
 The alpha value must be updated separately else it remains unchanged.
+
+It is not valid to use SQOA_OP_INDEX to repeat the last pixel once, unless it
+differs from the current pixel in alpha channel. If it is identical SQOA_OP_RUN 
+should be used instead.
 
 
 .- SQOA_OP_DIFF ----------.
@@ -146,6 +147,9 @@ so "1 - 2" will result in 255, while "255 + 1" will result in 0.
 
 Values are stored as unsigned integers with a bias of 2. E.g. -2 is stored as
 0 (b00). 1 is stored as 3 (b11).
+
+It is not valid to have all of dr, dg and db be zero. To repeat the last pixel
+once SQOA_OP_RUN should be used instead.
 
 The alpha value must be updated separately else it remains unchanged.
 
@@ -557,10 +561,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                         bytes[p++] = px.rgba.a;
                     }
                     else {
-                        if (needs_alpha && vr == 0 && vg == 0 && vb == 0) {
-                            bytes[p++] = SQOA_OP_RUN;
-                        }
-                        else if (
+                        if (
                             vr > -3 && vr < 2 &&
                             vg > -3 && vg < 2 &&
                             vb > -3 && vb < 2
@@ -640,7 +641,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
         desc->channels < 3 || desc->channels > 4 ||
         desc->colorspace > 1 ||
         !(header_magic == QOI_MAGIC || header_magic == SQOA_MAGIC) ||
-        (header_magic == QOI_MAGIC && !qoi_compat) ||
+        (header_magic == QOI_MAGIC && !desc->qoi_compat) ||
         desc->height >= SQOA_PIXELS_MAX / desc->width
     ) {
         return NULL;
