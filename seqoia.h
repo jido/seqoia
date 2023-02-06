@@ -510,6 +510,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
         }
         else {
             int index_pos = SQOA_COLOR_HASH(px) % 64;
+            sqoa_rgba_t px_alpha = px;
             
             if (run > 0) {
                 while (run > 61) {
@@ -520,6 +521,12 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                 run = 0;
             }
 
+            if (!qoi_compat && channels == 4) {
+                int index_a = SQOA_RGBA_HASH(px.rgba.r, px.rgba.g, px.rgba.b, 0xff) % 64;
+                px_alpha.rgba.a = alpha[index_a];
+                alpha[index_a] = px.rgba.a;
+            }
+            
             if (index[index_pos].v == px.v) {
                 bytes[p++] = SQOA_OP_INDEX | index_pos;
             }
@@ -527,12 +534,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                 int found_ixa = 0;
                 
                 if (!qoi_compat && channels == 4) {
-                    int index_a = SQOA_RGBA_HASH(px.rgba.r, px.rgba.g, px.rgba.b, 0xff) % 64;
-                    sqoa_rgba_t px_alpha = px;
-                    px_alpha.rgba.a = alpha[index_a];
-                    alpha[index_a] = px.rgba.a;
-                
-                    index_a = SQOA_COLOR_HASH(px_alpha) % 64;
+                    int index_a = SQOA_COLOR_HASH(px_alpha) % 64;
                     
                     found_ixa = (index[index_a].v == px_alpha.v);
                     if (found_ixa) {
