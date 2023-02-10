@@ -533,7 +533,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             else {
                 int found_ixa = 0;
                 
-                if (!qoi_compat && channels == 4) {
+                if (px_alpha.v != px.v) {
                     int index_a = SQOA_COLOR_HASH(px_alpha) % 64;
                     
                     found_ixa = (index[index_a].v == px_alpha.v);
