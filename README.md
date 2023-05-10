@@ -14,7 +14,7 @@ fits in about 400 lines of C.
 ## Example Usage
 
 - [sqoaconv.c](https://github.com/jido/seqoia/blob/sqoa-format/sqoaconv.c)
-converts between png <> sqoa <> qoi
+converts between png <> sqoa <> qoi > jpg
  - [sqoabench.c](https://github.com/jido/seqoia/blob/sqoa-format/sqoabench.c)
 a simple wrapper to benchmark stbi, libpng, qoi and sqoa
 

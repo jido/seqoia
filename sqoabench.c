@@ -5,9 +5,9 @@ Copyright (c) 2021, Dominic Szablewski - https://phoboslab.org
 SPDX-License-Identifier: MIT
 
 
-Simple benchmark suite for png, stbi and sqoa
+Simple benchmark suite for png, stbi, qoi and sqoa
 
-Requires libpng, "stb_image.h" and "stb_image_write.h"
+Requires libpng, "qoi.h", "stb_image.h" and "stb_image_write.h"
 Compile with: 
     gcc sqoabench.c -std=gnu99 -lpng -O3 -o sqoabench 
 

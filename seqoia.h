@@ -2,7 +2,7 @@
 
 Copyright (c) 2021, Dominic Szablewski - https://phoboslab.org
 SPDX-License-Identifier: MIT
-
+Modified by: Denis Bredelet (2023)
 
 SQOA - Losslessly squash image size, fast
 based on:
@@ -22,7 +22,7 @@ noticeable performance penalty.
 // library to create the implementation.
 
 #define SQOA_IMPLEMENTATION
-#include "sqoa.h"
+#include "seqoia.h"
 
 // Encode and store an RGBA buffer to the file system. The sqoa_desc describes
 // the input pixel data. Set qoi_compat to 1 to write to QOI instead of SQOA.
@@ -68,7 +68,7 @@ A SQOA file has a 14 byte header, followed by a start byte, any number of data
 "chunks" and an 8-byte end marker.
 
 struct sqoa_header_t {
-    char     magic[4];   // magic bytes "Sqoa"
+    char     magic[4];   // magic bytes "Sqoa", or "qoif" in compatible mode
     uint32_t width;      // image width in pixels (BE)
     uint32_t height;     // image height in pixels (BE)
     uint8_t  channels;   // 3 = RGB, 4 = RGBA
