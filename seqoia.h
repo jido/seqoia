@@ -292,6 +292,10 @@ how chunks are en-/decoded.
 The qoi_compat field indicates if the image is in QOI format (for decode) or
 if QOI compatibility is requested (for encode). */
 
+#define SQOA_CHAN_RGB   3
+#define SQOA_CHAN_RGBA  4
+#define SQOA_CHAN_BGR   5
+#define SQOA_CHAN_BGRA  6
 #define SQOA_SRGB   0
 #define SQOA_LINEAR 1
 
@@ -429,7 +433,7 @@ static unsigned int sqoa_read_32(const unsigned char *bytes, int *p) {
 }
 
 void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
-    int max_size, max_run, p, run, qoi_compat;
+    int max_size, max_run, p, run, qoi_compat, has_alpha;
     int px_len, px_end, px_pos, channels;
     unsigned char *bytes;
     const unsigned char *pixels;
@@ -440,15 +444,17 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
     if (
         data == NULL || out_len == NULL || desc == NULL ||
         desc->width == 0 || desc->height == 0 ||
-        desc->channels < 3 || desc->channels > 4 ||
+        desc->channels < 3 || desc->channels > 6 ||
         desc->colorspace > 1 ||
         desc->height >= SQOA_PIXELS_MAX / desc->width
     ) {
         return NULL;
     }
 
+    has_alpha = (desc->channels & 1) == 0;
+    channels = 3 + has_alpha;
     max_size =
-        desc->width * desc->height * (desc->channels + 1) +
+        desc->width * desc->height * (channels + 1) +
         SQOA_HEADER_SIZE + sizeof(sqoa_padding);
 
     qoi_compat = desc->qoi_compat;
@@ -488,16 +494,15 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
     px_prev.rgba.a = 255;
     px.rgba.a = 255;
 
-    px_len = desc->width * desc->height * desc->channels;
-    px_end = px_len - desc->channels;
-    channels = desc->channels;
+    px_len = desc->width * desc->height * channels;
+    px_end = px_len - channels;
 
     for (px_pos = 0; px_pos < px_len; px_pos += channels) {
         px.rgba.r = pixels[px_pos + 0];
         px.rgba.g = pixels[px_pos + 1];
         px.rgba.b = pixels[px_pos + 2];
 
-        if (channels == 4) {
+        if (has_alpha) {
             px.rgba.a = pixels[px_pos + 3];
         }
 
@@ -521,7 +526,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                 run = 0;
             }
 
-            if (!qoi_compat && channels == 4) {
+            if (!qoi_compat && has_alpha) {
                 int index_a = SQOA_RGBA_HASH(px.rgba.r, px.rgba.g, px.rgba.b, 0xff) % 64;
                 px_alpha.rgba.a = alpha[index_a];
                 alpha[index_a] = px.rgba.a;
@@ -619,6 +624,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
     sqoa_rgba_t index[64];
     sqoa_rgba_t px;
     int px_len, chunks_len, px_pos, qoi_compat;
+    int add_alpha = (channels == 4);
     int p = 0, run = 0;
 
     if (
@@ -640,7 +646,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 
     if (
         desc->width == 0 || desc->height == 0 ||
-        desc->channels < 3 || desc->channels > 4 ||
+        desc->channels < 3 || desc->channels > 6 ||
         desc->colorspace > 1 ||
         !(header_magic == QOI_MAGIC || header_magic == SQOA_MAGIC) ||
         (header_magic == QOI_MAGIC && !desc->qoi_compat) ||
@@ -650,7 +656,8 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
     }
     
     if (channels == 0) {
-        channels = desc->channels;
+        add_alpha = (desc->channels & 1) == 0;
+        channels = 3 + add_alpha;
     }
 
     px_len = desc->width * desc->height * channels;
@@ -726,7 +733,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
         pixels[px_pos + 1] = px.rgba.g;
         pixels[px_pos + 2] = px.rgba.b;
         
-        if (channels == 4) {
+        if (add_alpha) {
             pixels[px_pos + 3] = px.rgba.a;
         }
     }
