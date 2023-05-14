@@ -2,123 +2,123 @@
 
 ## Total for ../qoi/images/textures_pk01
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:        1.9        27.7         68.00          4.69       163   32.3%
-stbi:          2.3        13.3         56.67          9.76       232   45.8%
-qoi:           0.5         0.7        255.75        179.35       178   35.2%
-sqoa:          0.5         0.8        261.60        172.07       178   35.1%
+libpng:        3.1        45.2         42.14          2.88       163   32.3%
+stbi:          3.7        21.5         35.02          6.03       232   45.8%
+qoi:           0.9         1.2        151.35        110.54       178   35.2%
+sqoa:          0.9         1.6        150.18         82.81       178   35.1%
 
 ## Benchmarking ../qoi/images/icon_64/*.png -- 10 runs
 
 ## Total for ../qoi/images/icon_64
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:        0.1         0.4         60.49          9.59         3   23.6%
-stbi:          0.1         0.3         73.57         14.70         4   27.9%
-qoi:           0.0         0.0        549.87        389.80         4   28.7%
-sqoa:          0.0         0.0        436.30        348.48         4   26.5%
+libpng:        0.1         0.7         38.19          5.75         3   23.6%
+stbi:          0.1         0.5         44.58          9.03         4   27.9%
+qoi:           0.0         0.0        273.96        235.78         4   28.7%
+sqoa:          0.0         0.0        221.69        151.45         4   26.5%
 
 ## Benchmarking ../qoi/images/screenshot_game/*.png -- 10 runs
 
 ## Total for ../qoi/images/screenshot_game
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:        6.7       100.4         94.56          6.30       422   20.0%
-stbi:          8.3        46.8         76.36         13.53       591   28.0%
-qoi:           2.4         2.9        267.06        214.71       519   24.5%
-sqoa:          2.3         3.0        277.96        208.27       518   24.5%
+libpng:        8.5       129.0         74.29          4.91       422   20.0%
+stbi:         10.6        59.7         59.98         10.60       591   28.0%
+qoi:           3.1         3.7        203.50        170.48       519   24.5%
+sqoa:          3.1         4.6        206.42        137.91       518   24.5%
 
 ## Benchmarking ../qoi/images/textures_pk/*.png -- 10 runs
 
 ## Total for ../qoi/images/textures_pk
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:        0.4         6.6        102.41          6.72        80   59.9%
-stbi:          0.4         5.4        120.45          8.19       107   80.5%
-qoi:           0.3         0.3        175.72        133.70        75   56.5%
-sqoa:          0.2         0.3        186.74        129.53        75   56.4%
+libpng:        0.4         6.6        102.89          6.78        80   59.9%
+stbi:          0.4         5.3        119.98          8.33       107   80.5%
+qoi:           0.3         0.3        172.18        137.34        75   56.5%
+sqoa:          0.2         0.4        179.97        103.92        75   56.4%
 
 ## Benchmarking ../qoi/images/textures_photo/*.png -- 10 runs
 
 ## Total for ../qoi/images/textures_photo
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:       16.2       199.4         64.61          5.26      1836   59.8%
-stbi:         23.4       116.6         44.86          8.99      2334   76.0%
-qoi:           5.4         6.6        195.09        158.16      1981   64.5%
-sqoa:          5.1         7.0        203.98        150.10      1981   64.5%
+libpng:       15.9       196.0         65.89          5.35      1836   59.8%
+stbi:         22.2       111.6         47.25          9.39      2334   76.0%
+qoi:           5.3         6.4        197.34        164.52      1981   64.5%
+sqoa:          5.2         9.9        203.19        106.18      1981   64.5%
 
 ## Benchmarking ../qoi/images/pngimg/*.png -- 10 runs
 
 ## Total for ../qoi/images/pngimg
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:       20.9       259.8         86.43          6.96      1201   17.0%
-stbi:         24.3       134.8         74.40         13.41      1751   24.8%
-qoi:           5.2         7.5        350.99        240.65      1436   20.3%
-sqoa:          5.1         8.1        355.91        224.70      1404   19.9%
+libpng:       20.6       256.8         87.62          7.04      1201   17.0%
+stbi:         24.0       134.1         75.39         13.49      1751   24.8%
+qoi:           5.3         7.4        344.10        244.91      1436   20.3%
+sqoa:          5.4         9.7        336.62        186.26      1404   19.9%
 
 ## Benchmarking ../qoi/images/icon_512/*.png -- 10 runs
 
 ## Total for ../qoi/images/icon_512
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:        1.9        16.5        137.89         15.88        51    5.0%
-stbi:          1.9        10.6        140.39         24.74        69    6.8%
-qoi:           0.4         0.7        648.55        398.19        85    8.4%
-sqoa:          0.4         0.7        595.09        377.98        78    7.7%
+libpng:        1.9        16.3        140.15         16.08        51    5.0%
+stbi:          1.9        10.5        140.64         25.04        69    6.8%
+qoi:           0.4         0.6        616.15        404.64        85    8.4%
+sqoa:          0.5         0.8        528.84        320.92        78    7.7%
 
 ## Benchmarking ../qoi/images/photo_kodak/*.png -- 10 runs
 
 ## Total for ../qoi/images/photo_kodak
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:        6.0        89.0         65.38          4.42       648   56.3%
-stbi:          7.3        47.1         54.16          8.34       873   75.8%
-qoi:           2.2         2.9        177.87        137.52       671   58.3%
-sqoa:          2.0         3.0        194.48        130.63       671   58.3%
+libpng:        5.9        87.9         66.43          4.47       648   56.3%
+stbi:          7.5        46.3         52.49          8.48       873   75.8%
+qoi:           2.2         2.8        175.51        141.89       671   58.3%
+sqoa:          2.1         3.8        187.21        104.13       671   58.3%
 
 ## Benchmarking ../qoi/images/textures_pk02/*.png -- 10 runs
 
 ## Total for ../qoi/images/textures_pk02
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:        4.3        89.8         70.21          3.38       427   36.1%
-stbi:          6.0        35.2         50.73          8.64       623   52.5%
-qoi:           1.5         1.9        201.62        158.98       479   40.4%
-sqoa:          1.4         2.0        212.03        150.17       477   40.3%
+libpng:        4.3        89.2         71.07          3.40       427   36.1%
+stbi:          5.9        34.8         51.24          8.73       623   52.5%
+qoi:           1.5         1.9        197.49        161.44       479   40.4%
+sqoa:          1.5         2.5        204.28        121.39       477   40.3%
 
 ## Benchmarking ../qoi/images/screenshot_web/*.png -- 10 runs
 
 ## Total for ../qoi/images/screenshot_web
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:       41.7       509.4        195.07         15.95      2402    7.6%
-stbi:         41.3       383.4        196.52         21.19      3076    9.7%
-qoi:          15.0        22.4        541.86        363.12      2649    8.3%
-sqoa:         15.0        22.7        543.02        358.49      2613    8.2%
+libpng:       41.1       501.8        197.85         16.19      2402    7.6%
+stbi:         40.7       379.1        199.68         21.44      3076    9.7%
+qoi:          15.0        22.0        542.54        369.03      2649    8.3%
+sqoa:         15.9        27.3        511.53        298.17      2613    8.2%
 
 ## Benchmarking ../qoi/images/photo_tecnick/*.png -- 10 runs
 
 ## Total for ../qoi/images/photo_tecnick
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:       20.8       389.1         69.17          3.70      2114   50.1%
-stbi:         29.5       170.6         48.87          8.44      3053   72.4%
-qoi:           8.0        10.7        180.47        134.36      2527   59.9%
-sqoa:          7.5        11.4        191.04        126.70      2527   59.9%
+libpng:       21.1       385.6         68.40          3.73      2114   50.1%
+stbi:         32.3       169.3         44.54          8.51      3053   72.4%
+qoi:           8.4        10.6        171.57        135.57      2527   59.9%
+sqoa:          8.1        13.7        177.44        105.24      2527   59.9%
 
 ## Benchmarking ../qoi/images/photo_wikipedia/*.png -- 10 runs
 
 ## Total for ../qoi/images/photo_wikipedia
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:       17.8       270.9         60.86          4.00      1799   56.6%
-stbi:         25.1       129.5         43.15          8.37      2498   78.6%
-qoi:           5.9         8.7        182.35        125.10      2102   66.2%
-sqoa:          5.7         8.5        191.74        127.18      2102   66.2%
+libpng:       17.3       270.3         62.56          4.01      1799   56.6%
+stbi:         24.4       130.8         44.40          8.29      2498   78.6%
+qoi:           6.3         8.1        173.41        134.15      2102   66.2%
+sqoa:          6.1        10.9        176.68         99.62      2102   66.2%
 
 ## Benchmarking ../qoi/images/textures_plants/*.png -- 10 runs
 
 ## Total for ../qoi/images/textures_plants
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:       11.7       159.2         91.02          6.68       857   20.6%
-stbi:         13.4        82.8         79.36         12.85      1191   28.7%
-qoi:           2.6         4.3        404.01        249.85       922   22.2%
-sqoa:          2.6         4.9        403.91        217.59       905   21.8%
+libpng:       11.7       159.6         91.00          6.67       857   20.6%
+stbi:         13.5        83.1         78.76         12.80      1191   28.7%
+qoi:           2.8         4.2        380.92        250.47       922   22.2%
+sqoa:          2.9         6.1        363.60        174.00       905   21.8%
 
 # Grand total for ../qoi/images
          decode ms   encode ms   decode mpps   encode mpps   size kb    rate
-libpng:        5.2        77.3         89.04          6.01       398   24.2%
-stbi:          6.4        38.2         72.17         12.14       561   34.2%
-qoi:           1.7         2.3        275.45        203.35       463   28.2%
-sqoa:          1.6         2.4        285.21        193.95       460   28.0%
+libpng:        5.6        83.7         82.49          5.54       398   24.2%
+stbi:          7.0        41.2         65.96         11.28       561   34.2%
+qoi:           1.9         2.4        244.82        190.69       463   28.2%
+sqoa:          1.9         3.1        246.25        147.46       460   28.0%
 

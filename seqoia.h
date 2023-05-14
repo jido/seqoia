@@ -602,9 +602,9 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                             vg   > -33 && vg   < 32 &&
                             vg_b >  -9 && vg_b <  8
                         ) {
-                            bytes[p++] = SQOA_OP_LUMA    | (vg   + 32);
+                            bytes[p++] = SQOA_OP_LUMA | (vg + 32);
                             if (col_channels == 3) {
-                                bytes[p++] = (vg_r + 8) << 4 | (vg_b +  8);
+                                bytes[p++] = (vg_r + 8) << 4 | (vg_b + 8);
                             }
                         }
                         else {
