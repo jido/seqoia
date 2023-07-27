@@ -797,7 +797,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
 
 int sqoa_write(const char *filename, const void *data, const sqoa_desc *desc) {
     FILE *f = fopen(filename, "wb");
-    int size;
+    int size, err;
     void *encoded;
 
     if (!f) {
@@ -811,10 +811,12 @@ int sqoa_write(const char *filename, const void *data, const sqoa_desc *desc) {
     }
 
     fwrite(encoded, 1, size, f);
+    fflush(f);
+    err = ferror(f);
     fclose(f);
 
     SQOA_FREE(encoded);
-    return size;
+    return err ? 0 : size;
 }
 
 void *sqoa_read(const char *filename, sqoa_desc *desc, int channels) {
@@ -828,11 +830,10 @@ void *sqoa_read(const char *filename, sqoa_desc *desc, int channels) {
 
     fseek(f, 0, SEEK_END);
     size = ftell(f);
-    if (size <= 0) {
+    if (size <= 0 || fseek(f, 0, SEEK_SET) != 0) {
         fclose(f);
         return NULL;
     }
-    fseek(f, 0, SEEK_SET);
 
     data = SQOA_MALLOC(size);
     if (!data) {
@@ -843,7 +844,7 @@ void *sqoa_read(const char *filename, sqoa_desc *desc, int channels) {
     bytes_read = fread(data, 1, size, f);
     fclose(f);
 
-    pixels = sqoa_decode(data, bytes_read, desc, channels);
+    pixels = (bytes_read != size) ? NULL : sqoa_decode(data, bytes_read, desc, channels);
     SQOA_FREE(data);
     return pixels;
 }
