@@ -71,12 +71,12 @@ struct sqoa_header_t {
     char     magic[4];   // magic bytes "Sqoa", or "qoif" in compatible mode
     uint32_t width;      // image width in pixels (BE)
     uint32_t height;     // image height in pixels (BE)
-    uint8_t  channels;   // 3 = RGB, 4 = RGBA
+    uint8_t  channels;   // 1 = MONO, 2 = MONOA, 3 = RGB, 4 = RGBA, 5 = BGR, 6 = BGRA
     uint8_t  colorspace; // 0 = sRGB with linear alpha, 1 = all channels linear
     uint8_t  qoi_compat; // 0 = no compatibility, 1 = compatible with QOI
 };
 
-The value of the start byte is 48 ('0'). If the start byte is missing, the
+The value of the start byte is 49 ('1'). If the start byte is missing, the
 decoder switches to QOI compatibility mode.
 
 Images are encoded row by row, left to right, top to bottom. The decoder and
@@ -85,73 +85,61 @@ image is complete when all pixels specified by width * height have been covered.
 
 Pixels are encoded as
  - a run of the previous pixel
- - an index into an array of previously seen pixels
  - a difference to the previous pixel value in r,g,b
  - full r,g,b or r,g,b,a values
+ - a reference to a previous operation
 
 The color channels are assumed to not be premultiplied with the alpha channel
-("un-premultiplied alpha"). The indexed and delta pixels can receive an update
-to the alpha channel.
+("un-premultiplied alpha").
 
-A running array[64] (zero-initialized) of previously seen pixel values is
-maintained by the encoder and decoder. Each pixel that is seen by the encoder
-and decoder is put into this array at the position formed by a hash function of
-the color value. In the encoder, if the pixel value at the index matches the
-current pixel, this index position is written to the stream as SQOA_OP_INDEX.
-The hash function for the index is:
-
-    index_position = (r * 3 + g * 5 + b * 7 + a * 11) % 64
-
-Each chunk starts with a 2- or 8-bit tag, followed by a number of data bits. The
+Each chunk starts with a 1- to 8-bit tag, followed by a number of data bits. The
 bit length of chunks is divisible by 8 - i.e. all chunks are byte aligned. All
 values encoded in these data bits have the most significant bit on the left.
 
-The 8-bit tags have precedence over the 2-bit tags. A decoder must check for the
-presence of an 8-bit tag first.
+The longer tags have precedence over the smaller tags. A decoder must check for
+the presence of an 8-bit tag first.
 
-The byte stream's end is marked with 7 0x00 bytes followed a single 0x01 byte.
+The byte stream starts with 0x31 ('1') and ends with a marker formed of seven 
+0x00 bytes followed with a single 0x01 byte.
 
 
 The possible chunks are:
 
 
-.- SQOA_OP_INDEX ---------.
+.- SQOA_OP_REF -----------.
 |         Byte[0]         |
 |  7  6  5  4  3  2  1  0 |
-|-------+-----------------|
-|  0  0 |     index       |
+|----+-----+--------------|
+|  0 | len |    offset    |
 `-------------------------`
-2-bit tag b00
-6-bit index into the color index array: 0..63
+1-bit tag b0
+2-bit length between 2 and 4
+5-bit offset from current position in the byte stream: 0..31
 
-The alpha value must be updated separately else it remains unchanged.
+The length is stored as an integer with a bias of -2, which means 2 must be
+added to the stored value. Stored length value 3 (b11) is reserved for the 
+alpha channel update operation and cannot be used.
 
-It is not valid to use SQOA_OP_INDEX to repeat the last pixel once, unless it
-differs from the current pixel in alpha channel. If it is identical SQOA_OP_RUN 
-should be used instead.
+The reference starts length bytes before the offset location, so the offset
+actually marks the end of the reference.
 
 
-.- SQOA_OP_DIFF ----------.
+.- SQOA_OP_ALPHA ---------.
 |         Byte[0]         |
 |  7  6  5  4  3  2  1  0 |
-|-------+-----+-----+-----|
-|  0  1 |  dr |  dg |  db |
+|----------+--------------|
+|  0  1  1 |  alpha diff  |
 `-------------------------`
-2-bit tag b01
-2-bit   red channel difference from the previous pixel between -2..1
-2-bit green channel difference from the previous pixel between -2..1
-2-bit  blue channel difference from the previous pixel between -2..1
+3-bit tag b011
+5-bit alpha channel difference from the previous pixel between -16..15
 
 The difference to the current channel values are using a wraparound operation,
 so "1 - 2" will result in 255, while "255 + 1" will result in 0.
 
-Values are stored as unsigned integers with a bias of 2. E.g. -2 is stored as
-0 (b00). 1 is stored as 3 (b11).
+Values are stored as unsigned integers with a bias of 16. E.g. -16 is stored as
+0 (b00000). 1 is stored as 17 (b10001).
 
-It is not valid to have all of dr, dg and db be zero. To repeat the last pixel
-once SQOA_OP_RUN should be used instead.
-
-The alpha value must be updated separately else it remains unchanged.
+The alpha channel update applies to last pixel.
 
 
 .- SQOA_OP_LUMA ------------------------------------.
@@ -164,6 +152,8 @@ The alpha value must be updated separately else it remains unchanged.
 6-bit green channel difference from the previous pixel -32..31
 4-bit   red channel difference minus green channel difference -8..7
 4-bit  blue channel difference minus green channel difference -8..7
+
+The second byte is only used for multicolour images (3 or 4 channels).
 
 The green channel is used to indicate the general direction of change and is
 encoded in 6 bits. The red and blue channels (dr and db) base their diffs off
@@ -178,18 +168,6 @@ Values are stored as unsigned integers with a bias of 32 for the green channel
 and a bias of 8 for the red and blue channel.
 
 The alpha value must be updated separately else it remains unchanged.
-
-
-.- SQOA_OP_ALPHA -------------------.
-|         Byte[0]         | Byte[1] |
-|  7  6  5  4  3  2  1  0 | 7 .. 0  |
-|-------------------------+---------|
-|  0  1  1  0  1  0  1  0 |  alpha  |
-`-----------------------------------`
-8-bit tag b01101010
-8-bit alpha channel value
-
-The alpha channel update applies to last pixel.
 
 
 .- SQOA_OP_RUN -----------.
@@ -229,6 +207,8 @@ The run length is set to SQOA_MAXRUN (512).
 8-bit green channel value
 8-bit  blue channel value
 
+The third and fourth bytes are only used for multicolour images (3 or 4 channels).
+
 The alpha value remains unchanged from the previous pixel.
 
 
@@ -244,12 +224,46 @@ The alpha value remains unchanged from the previous pixel.
 8-bit  blue channel value
 8-bit alpha channel value
 
+The third and fourth bytes are only used for multicolour images (3 or 4 channels).
+
 
 
 -- QOI Compatibility Mode
 
-The only differences in compatibility mode are the lack of a start byte and
-that QOI_OP_RUN replaces all of SQOA_OP_RUN, SQOA_OP_BIGRUN, SQOA_OP_ALPHA.
+The differences in compatibility mode are the lack of a start byte and that the 
+QOI_OP_INDEX and QOI_OP_DIFF operations replace SQOA_OP_REF and SQOA_OP_ALPHA and
+that SQOA_OP_BIGRUN is removed, which frees one more value for QOI_OP_RUN.
+
+.- QOI_OP_INDEX ----------.
+|         Byte[0]         |
+|  7  6  5  4  3  2  1  0 |
+|-------+-----------------|
+|  0  0 |     index       |
+`-------------------------`
+2-bit tag b00
+6-bit index into the color index array: 0..63
+
+A valid encoder must not issue 2 or more consecutive QOI_OP_INDEX chunks to the
+same index. QOI_OP_RUN should be used instead.
+
+
+.- QOI_OP_DIFF -----------.
+|         Byte[0]         |
+|  7  6  5  4  3  2  1  0 |
+|-------+-----+-----+-----|
+|  0  1 |  dr |  dg |  db |
+`-------------------------`
+2-bit tag b01
+2-bit   red channel difference from the previous pixel between -2..1
+2-bit green channel difference from the previous pixel between -2..1
+2-bit  blue channel difference from the previous pixel between -2..1
+
+The difference to the current channel values are using a wraparound operation,
+so "1 - 2" will result in 255, while "255 + 1" will result in 0.
+
+Values are stored as unsigned integers with a bias of 2. E.g. -2 is stored as
+0 (b00). 1 is stored as 3 (b11).
+
 
 .- QOI_OP_RUN ------------.
 |         Byte[0]         |
@@ -381,22 +395,26 @@ Implementation */
     #define SQOA_ZEROARR(a) memset((a),0,sizeof(a))
 #endif
 
-#define SQOA_OP_INDEX  0x00 /* 00xxxxxx */
-#define SQOA_OP_DIFF   0x40 /* 01xxxxxx */
+#define SQOA_OP_REF    0x00 /* 0xxxxxxx */
+#define SQOA_OP_ALPHA  0x60 /* 011xxxxx */
 #define SQOA_OP_LUMA   0x80 /* 10xxxxxx */
 #define SQOA_OP_RUN    0xc0 /* 11xxxxxx */
-#define SQOA_OP_ALPHA  0x6a /* 01101010 */
 #define SQOA_OP_BIGRUN 0xfd /* 11111101 */
 #define SQOA_OP_RGB    0xfe /* 11111110 */
 #define SQOA_OP_RGBA   0xff /* 11111111 */
 //#define QOI_OP_RUN     0xc0 /* 11xxxxxx */
+#define QOI_OP_INDEX   0x00 /* 00xxxxxx */
+#define QOI_OP_DIFF    0x40 /* 01xxxxxx */
 
 #define SQOA_MASK_2    0xc0 /* 11000000 */
 
-#define SQOA_MAXRUN 512
-#define QOI_MAXRUN  62
-#define SQOA_RGBA_HASH(R, G, B, A) (R*3 + G*5 + B*7 + A*11)
-#define SQOA_COLOR_HASH(C) SQOA_RGBA_HASH(C.rgba.r, C.rgba.g, C.rgba.b, C.rgba.a)
+#define SQOA_MAXRUN    512
+#define QOI_MAXRUN     62
+#define QOI_INDEX_SIZE 64
+#define QOI_RGBA_HASH(R, G, B, A) (R*3 + G*5 + B*7 + A*11)
+#ifndef QOI_COLOR_HASH
+    #define QOI_COLOR_HASH(C) QOI_RGBA_HASH(C.rgba.r, C.rgba.g, C.rgba.b, C.rgba.a)
+#endif
 #define SQOA_MAGIC \
     (((unsigned int)'S') << 24 | ((unsigned int)'q') << 16 | \
      ((unsigned int)'o') <<  8 | ((unsigned int)'a'))
@@ -404,7 +422,7 @@ Implementation */
     (((unsigned int)'q') << 24 | ((unsigned int)'o') << 16 | \
      ((unsigned int)'i') <<  8 | ((unsigned int)'f'))
 #define SQOA_HEADER_SIZE 14
-#define SQOA_START_BYTE 48
+#define SQOA_START_BYTE 49
 
 /* 2GB is the max file size that this implementation can safely handle. We guard
 against anything larger than that, assuming the worst case with 5 bytes per
@@ -440,8 +458,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
     int px_len, px_end, px_pos, channels;
     unsigned char *bytes;
     const unsigned char *pixels;
-    sqoa_rgba_t index[128];
-    unsigned char alpha[128] = {0xff};
+    sqoa_rgba_t index[QOI_INDEX_SIZE];
     sqoa_rgba_t px, px_prev;
 
     if (
@@ -454,21 +471,22 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
         return NULL;
     }
 
+    qoi_compat = desc->qoi_compat;
     has_alpha = (desc->channels & 1) == 0;
     if (desc->channels < 3) {
+        if (qoi_compat) {
+            return NULL;
+        }
         col_channels = 1;
-        index_size = 128;
     }
     else {
         col_channels = 3;
-        index_size = 64;
     }
     channels = col_channels + has_alpha;
     max_size =
         desc->width * desc->height * (channels + 1) +
         SQOA_HEADER_SIZE + sizeof(sqoa_padding);
 
-    qoi_compat = desc->qoi_compat;
     p = 0;
     bytes = (unsigned char *) SQOA_MALLOC(max_size);
     if (!bytes) {
@@ -483,7 +501,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
     }
     sqoa_write_32(bytes, &p, desc->width);
     sqoa_write_32(bytes, &p, desc->height);
-    bytes[p++] = desc->channels;
+    bytes[p++] = channels;
     bytes[p++] = desc->colorspace;
     
     if (qoi_compat) {
@@ -499,11 +517,11 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
     SQOA_ZEROARR(index);
 
     run = 0;
-    px_prev.rgba.r = 0;
-    px_prev.rgba.g = 0;
-    px_prev.rgba.b = 0;
-    px_prev.rgba.a = 255;
+    px.rgba.r = 0;
+    px.rgba.g = 0;
+    px.rgba.b = 0;
     px.rgba.a = 255;
+    px_prev = px;
 
     px_len = desc->width * desc->height * channels;
     px_end = px_len - channels;
@@ -530,8 +548,7 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
             }
         }
         else {
-            int index_pos = SQOA_COLOR_HASH(px) % index_size;
-            sqoa_rgba_t px_alpha = px;
+            int index_pos, qoi_found;
             
             if (run > 0) {
                 while (run > 61) {
@@ -542,91 +559,76 @@ void *sqoa_encode(const void *data, const sqoa_desc *desc, int *out_len) {
                 run = 0;
             }
 
-            if (!qoi_compat && has_alpha && col_channels == 3) {
-                int index_a = SQOA_RGBA_HASH(px.rgba.r, px.rgba.g, px.rgba.b, 0xff) % 64;
-                px_alpha.rgba.a = alpha[index_a];
-                alpha[index_a] = px.rgba.a;
-            }
-            
-            if (index[index_pos].v == px.v) {
-                bytes[p++] = SQOA_OP_INDEX | index_pos;
-            }
-            else {
-                int found_ixa = 0;
+            if (qoi_compat) {
+                index_pos = QOI_COLOR_HASH(px) % QOI_INDEX_SIZE;
                 
-                if (px_alpha.v != px.v) {
-                    int index_a = SQOA_COLOR_HASH(px_alpha) % index_size;
-                    
-                    found_ixa = (index[index_a].v == px_alpha.v);
-                    if (found_ixa) {
-                        bytes[p++] = SQOA_OP_INDEX | index_a;
-                        bytes[p++] = SQOA_OP_ALPHA;
+                qoi_found = (index[index_pos].v == px.v);
+                if (qoi_found) {
+                    bytes[p++] = QOI_OP_INDEX | index_pos;
+                }
+                else {
+                    index[index_pos] = px;
+
+                    if (px.rgba.a != px_prev.rgba.a) {
+                        bytes[p++] = SQOA_OP_RGBA;
+                        bytes[p++] = px.rgba.r;
+                        bytes[p++] = px.rgba.g;
+                        bytes[p++] = px.rgba.b;
                         bytes[p++] = px.rgba.a;
+                        qoi_found = 1;
                     }
                 }
-                
-                index[index_pos] = px;
-                
-                if (!found_ixa) {
-                    signed char vr = px.rgba.r - px_prev.rgba.r;
-                    signed char vg = px.rgba.g - px_prev.rgba.g;
-                    signed char vb = px.rgba.b - px_prev.rgba.b;
-                    signed char va = px.rgba.a - px_prev.rgba.a;
-                    signed char vg_r = vr - vg;
-                    signed char vg_b = vb - vg;
-                    int needs_alpha = (va != 0);
+            }
+            
+            if (!(qoi_compat && qoi_found)) {
+                signed char vr = px.rgba.r - px_prev.rgba.r;
+                signed char vg = px.rgba.g - px_prev.rgba.g;
+                signed char vb = px.rgba.b - px_prev.rgba.b;
+                signed char va = px.rgba.a - px_prev.rgba.a;
+                signed char vg_r = vr - vg;
+                signed char vg_b = vb - vg;
+                int needs_alpha = (va != 0);
 
-                    if ((qoi_compat || col_channels == 1) && needs_alpha) {
-                        bytes[p++] = SQOA_OP_RGBA;
-                        if (col_channels == 3) {
-                            bytes[p++] = px.rgba.r;
-                            bytes[p++] = px.rgba.g;
-                            bytes[p++] = px.rgba.b;
+                if (
+                    qoi_compat &&
+                    vr > -3 && vr < 2 &&
+                    vg > -3 && vg < 2 &&
+                    vb > -3 && vb < 2
+                ) {
+                    bytes[p++] = QOI_OP_DIFF | (vr + 2) << 4 | (vg + 2) << 2 | (vb + 2);
+                }
+                else if (col_channels == 1 && needs_alpha) {
+                    bytes[p++] = SQOA_OP_RGBA;
+                    bytes[p++] = px.rgba.g;
+                    bytes[p++] = px.rgba.a;
+                }
+                else if (
+                    vg_r >  -9 && vg_r <  8 &&
+                    vg   > -33 && vg   < 32 &&
+                    vg_b >  -9 && vg_b <  8 &&
+                    va   > -17 && va   < 16
+                ) {
+                    bytes[p++] = SQOA_OP_LUMA | (vg + 32);
+                    if (col_channels == 3) {
+                        bytes[p++] = (vg_r + 8) << 4 | (vg_b + 8);
+
+                        if (needs_alpha) {
+                            bytes[p++] = SQOA_OP_ALPHA | (va + 16);
                         }
-                        else {
-                            bytes[p++] = px.rgba.g;
-                        }
-                        bytes[p++] = px.rgba.a;
+                    }
+                }
+                else {
+                    bytes[p++] = SQOA_OP_RGB | needs_alpha;
+                    if (col_channels == 3) {
+                        bytes[p++] = px.rgba.r;
+                        bytes[p++] = px.rgba.g;
+                        bytes[p++] = px.rgba.b;
                     }
                     else {
-                        if (
-                            col_channels == 3 &&
-                            vr > -3 && vr < 2 &&
-                            vg > -3 && vg < 2 &&
-                            vb > -3 && vb < 2
-                        ) {
-                            bytes[p++] = SQOA_OP_DIFF | (vr + 2) << 4 | (vg + 2) << 2 | (vb + 2);
-                        }
-                        else if (
-                            vg_r >  -9 && vg_r <  8 &&
-                            vg   > -33 && vg   < 32 &&
-                            vg_b >  -9 && vg_b <  8
-                        ) {
-                            bytes[p++] = SQOA_OP_LUMA | (vg + 32);
-                            if (col_channels == 3) {
-                                bytes[p++] = (vg_r + 8) << 4 | (vg_b + 8);
-                            }
-                        }
-                        else {
-                            bytes[p++] = SQOA_OP_RGB | needs_alpha;
-                            if (col_channels == 3) {
-                                bytes[p++] = px.rgba.r;
-                                bytes[p++] = px.rgba.g;
-                                bytes[p++] = px.rgba.b;
-                            }
-                            else {
-                                bytes[p++] = px.rgba.g;
-                            }
-                            if (needs_alpha) {
-                                bytes[p++] = px.rgba.a;
-                                needs_alpha = 0;
-                            }
-                        }
-        
-                        if (needs_alpha) {
-                            bytes[p++] = SQOA_OP_ALPHA;
-                            bytes[p++] = px.rgba.a;
-                        }
+                        bytes[p++] = px.rgba.g;
+                    }
+                    if (needs_alpha) {
+                        bytes[p++] = px.rgba.a;
                     }
                 }
             }
@@ -705,8 +707,8 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
     }
 
     qoi_compat = desc->qoi_compat;
-    if (!qoi_compat) {
-        p++;
+    if (!qoi_compat && bytes[p++] != SQOA_START_BYTE) {
+        return NULL;
     }
 
     SQOA_ZEROARR(index);
@@ -736,13 +738,10 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                     px.rgba.a = bytes[p++];
                 }
             }
-            else if (b1 < index_size) {
+            else if (qoi_compat && b1 < index_size) {
                 px = index[b1];
             }
-            else if (
-                (qoi_compat || b1 != SQOA_OP_ALPHA) &&
-                (b1 & SQOA_MASK_2) == SQOA_OP_DIFF
-            ) {
+            else if (qoi_compat && (b1 & SQOA_MASK_2) == QOI_OP_DIFF) {
                 px.rgba.r += ((b1 >> 4) & 0x03) - 2;
                 px.rgba.g += ((b1 >> 2) & 0x03) - 2;
                 px.rgba.b += ( b1       & 0x03) - 2;
@@ -763,12 +762,17 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 run = (b1 & 0x3f);
             }
 
-            if (!qoi_compat && col_channels == 3 && bytes[p] == SQOA_OP_ALPHA) {
-                p++;
-                px.rgba.a = bytes[p++];
+            if (
+                !qoi_compat && col_channels == 3 &&
+                bytes[p] >= SQOA_OP_ALPHA && bytes[p] < SQOA_OP_LUMA
+            ) {
+                b1 = bytes[p++];
+                px.rgba.a = px.rgba.a + (b1 & 0x1f) - 16;
             }
             
-            index[SQOA_COLOR_HASH(px) % index_size] = px;
+            if (qoi_compat) {
+                index[QOI_COLOR_HASH(px) % index_size] = px;
+            }
         }
 
         if (channels >= 3 && col_channels == 3) {
