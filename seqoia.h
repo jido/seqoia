@@ -415,6 +415,7 @@ Implementation */
 #ifndef QOI_COLOR_HASH
     #define QOI_COLOR_HASH(C) QOI_RGBA_HASH(C.rgba.r, C.rgba.g, C.rgba.b, C.rgba.a)
 #endif
+#define SQOA_NEXT(pos, end, saved) (pos == end ? pos = saved + 1 : pos++)
 #define SQOA_MAGIC \
     (((unsigned int)'S') << 24 | ((unsigned int)'q') << 16 | \
      ((unsigned int)'o') <<  8 | ((unsigned int)'a'))
@@ -656,7 +657,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
     sqoa_rgba_t px;
     int px_len, chunks_len, px_pos, qoi_compat, index_size, col_channels;
     int add_alpha = (channels & 1) == 0;
-    int p = 0, run = 0;
+    int p = 0, ref = -1, refp = 0, run = 0;
 
     if (
         data == NULL || desc == NULL ||
@@ -700,14 +701,14 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
         channels = col_channels + add_alpha;
     }
     
-    px_len = desc->width * desc->height * channels;
-    pixels = (unsigned char *) SQOA_MALLOC(px_len);
-    if (!pixels) {
+    qoi_compat = desc->qoi_compat;
+    if (!qoi_compat && bytes[p++] != SQOA_START_BYTE) {
         return NULL;
     }
 
-    qoi_compat = desc->qoi_compat;
-    if (!qoi_compat && bytes[p++] != SQOA_START_BYTE) {
+    px_len = desc->width * desc->height * channels;
+    pixels = (unsigned char *) SQOA_MALLOC(px_len);
+    if (!pixels) {
         return NULL;
     }
 
@@ -723,19 +724,30 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
             run--;
         }
         else if (p < chunks_len) {
-            int b1 = bytes[p++];
+            int b1 = bytes[SQOA_NEXT(p, ref, refp)];
+            
+            if (!qoi_compat && b1 < SQOA_OP_ALPHA) {
+                refp = p;
+                ref = p - (b1 & 31);
+                p = ref - 2 - (b1 >> 5);
+                if (p < 0) {
+                    SQOA_FREE(pixels);
+                    return NULL;
+                }
+                b1 = bytes[p++];
+            }
 
             if (b1 == SQOA_OP_RGB || b1 == SQOA_OP_RGBA) {
                 if (col_channels == 3) {
-                    px.rgba.r = bytes[p++];
-                    px.rgba.g = bytes[p++];
-                    px.rgba.b = bytes[p++];
+                    px.rgba.r = bytes[SQOA_NEXT(p, ref, refp)];
+                    px.rgba.g = bytes[SQOA_NEXT(p, ref, refp)];
+                    px.rgba.b = bytes[SQOA_NEXT(p, ref, refp)];
                 }
                 else {
-                    px.rgba.g = bytes[p++];
+                    px.rgba.g = bytes[SQOA_NEXT(p, ref, refp)];
                 }
                 if (b1 == SQOA_OP_RGBA) {
-                    px.rgba.a = bytes[p++];
+                    px.rgba.a = bytes[SQOA_NEXT(p, ref, refp)];
                 }
             }
             else if (qoi_compat && b1 < index_size) {
@@ -750,7 +762,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 int vg = (b1 & 0x3f) - 32;
                 px.rgba.g += vg;
                 if (col_channels == 3) {
-                    int b2 = bytes[p++];
+                    int b2 = bytes[SQOA_NEXT(p, ref, refp)];
                     px.rgba.r += vg - 8 + ((b2 >> 4) & 0x0f);
                     px.rgba.b += vg - 8 +  (b2       & 0x0f);
                 }
@@ -766,7 +778,7 @@ void *sqoa_decode(const void *data, int size, sqoa_desc *desc, int channels) {
                 !qoi_compat && col_channels == 3 &&
                 bytes[p] >= SQOA_OP_ALPHA && bytes[p] < SQOA_OP_LUMA
             ) {
-                b1 = bytes[p++];
+                b1 = bytes[SQOA_NEXT(p, ref, refp)];
                 px.rgba.a = px.rgba.a + (b1 & 0x1f) - 16;
             }
             
